@@ -24,7 +24,16 @@ export type ViewType =
   | 'rooms'
   | 'guests'
   | 'channels'
+  | 'housekeeping'
   | 'reports'
+  | 'analytics'
+  | 'revenue'
+  | 'rate-parity'
+  | 'loyalty'
+  | 'reviews'
+  | 'concierge'
+  | 'activity'
+  | 'night_audit'
   | 'settings'
 
 export type BookingStatus = ApiBooking['status']

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { NextRequest } from 'next/server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'easybeds-dev-secret-key-2026';
 
@@ -55,4 +56,15 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, hash: string): boolean {
   return hashPassword(password) === hash;
+}
+
+export async function verifyAuth(request: NextRequest): Promise<JwtPayload | null> {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) return null;
+    const token = authHeader.slice(7);
+    return verifyJwt(token);
+  } catch {
+    return null;
+  }
 }

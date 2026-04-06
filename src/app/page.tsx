@@ -14,6 +14,15 @@ import { GuestsView } from '@/components/views/guests-view'
 import { ChannelsView } from '@/components/views/channels-view'
 import { ReportsView } from '@/components/views/reports-view'
 import { SettingsView } from '@/components/views/settings-view'
+import { HousekeepingView } from '@/components/views/housekeeping-view'
+import { ActivityView } from '@/components/views/activity-view'
+import { NightAuditView } from '@/components/views/night-audit-view'
+import { ConciergeView } from '@/components/views/concierge-view'
+import { LoyaltyView } from '@/components/views/loyalty-view'
+import { ReviewsView } from '@/components/views/reviews-view'
+import { RevenueView } from '@/components/views/revenue-view'
+import { AnalyticsView } from '@/components/views/analytics-view'
+import { RateParityView } from '@/components/views/rate-parity-view'
 import { NewBookingDialog } from '@/components/booking/new-booking-dialog'
 import { BookingDetailsDialog } from '@/components/booking/booking-details-dialog'
 import { cn } from '@/lib/utils'
@@ -30,6 +39,15 @@ function ViewRenderer() {
     channels: <ChannelsView />,
     reports: <ReportsView />,
     settings: <SettingsView />,
+    housekeeping: <HousekeepingView />,
+    activity: <ActivityView />,
+    night_audit: <NightAuditView />,
+    revenue: <RevenueView />,
+    analytics: <AnalyticsView />,
+    'rate-parity': <RateParityView />,
+    concierge: <ConciergeView />,
+    loyalty: <LoyaltyView />,
+    reviews: <ReviewsView />,
   }
 
   return (

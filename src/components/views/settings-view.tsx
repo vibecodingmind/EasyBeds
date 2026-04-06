@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Hotel,
@@ -14,6 +14,11 @@ import {
   Crown,
   Check,
   Star,
+  ShieldAlert,
+  Trash2,
+  Edit3,
+  Loader2,
+  Info,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +36,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -121,6 +128,325 @@ const PLAN_TIERS = {
 } as const
 
 type PlanKey = keyof typeof PLAN_TIERS
+
+// ─── Cancellation Policy Manager Sub-component ─────────────────────────────
+
+interface CancellationPolicy {
+  id: string
+  name: string
+  description: string | null
+  rules: string
+  isDefault: boolean
+  isActive: boolean
+  createdAt: string
+}
+
+function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
+  const [policies, setPolicies] = useState<CancellationPolicy[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showDialog, setShowDialog] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState<CancellationPolicy | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    isDefault: false,
+    rules: [{ hoursBefore: 48, chargePercent: 0 }, { hoursBefore: 0, chargePercent: 100 }],
+  })
+
+  const fetchPolicies = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cancellation-policies?hotelId=${hotelId}`)
+      const json = await res.json()
+      if (json.success) setPolicies(json.data)
+    } catch {
+      toast.error('Failed to fetch policies')
+    } finally {
+      setLoading(false)
+    }
+  }, [hotelId])
+
+  useEffect(() => { fetchPolicies() }, [fetchPolicies])
+
+  const handleSave = async () => {
+    if (!form.name || form.rules.length === 0) return
+    setSaving(true)
+    try {
+      const url = editingPolicy
+        ? `/api/cancellation-policies/${editingPolicy.id}?hotelId=${hotelId}`
+        : `/api/cancellation-policies?hotelId=${hotelId}`
+      const res = await fetch(url, {
+        method: editingPolicy ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(editingPolicy ? 'Policy updated' : 'Policy created')
+        setShowDialog(false)
+        setEditingPolicy(null)
+        setForm({
+          name: '',
+          description: '',
+          isDefault: false,
+          rules: [{ hoursBefore: 48, chargePercent: 0 }, { hoursBefore: 0, chargePercent: 100 }],
+        })
+        fetchPolicies()
+      } else {
+        toast.error(json.error || 'Failed to save')
+      }
+    } catch {
+      toast.error('Failed to save policy')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/cancellation-policies/${id}?hotelId=${hotelId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Policy deleted')
+        fetchPolicies()
+      } else {
+        toast.error(json.error || 'Failed to delete')
+      }
+    } catch {
+      toast.error('Failed to delete policy')
+    }
+  }
+
+  const handleEdit = (policy: CancellationPolicy) => {
+    let parsedRules: { hoursBefore: number; chargePercent: number }[] = []
+    try { parsedRules = JSON.parse(policy.rules) } catch { /* use defaults */ }
+    setEditingPolicy(policy)
+    setForm({
+      name: policy.name,
+      description: policy.description || '',
+      isDefault: policy.isDefault,
+      rules: parsedRules.length > 0 ? parsedRules : [{ hoursBefore: 48, chargePercent: 0 }, { hoursBefore: 0, chargePercent: 100 }],
+    })
+    setShowDialog(true)
+  }
+
+  const addRule = () => {
+    setForm({ ...form, rules: [...form.rules, { hoursBefore: 24, chargePercent: 50 }] })
+  }
+
+  const removeRule = (index: number) => {
+    if (form.rules.length <= 1) return
+    setForm({ ...form, rules: form.rules.filter((_, i) => i !== index) })
+  }
+
+  const updateRule = (index: number, field: 'hoursBefore' | 'chargePercent', value: number) => {
+    const newRules = [...form.rules]
+    newRules[index] = { ...newRules[index], [field]: value }
+    setForm({ ...form, rules: newRules })
+  }
+
+  const parseRules = (rulesStr: string): { hoursBefore: number; chargePercent: number }[] => {
+    try { return JSON.parse(rulesStr) } catch { return [] }
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription className="text-sm">
+          Cancellation policies define the fees charged when a booking is cancelled. The default policy
+          is automatically applied when calculating cancellation fees.
+        </AlertDescription>
+      </Alert>
+
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Policies ({policies.length})</h3>
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700"
+          onClick={() => {
+            setEditingPolicy(null)
+            setForm({
+              name: '',
+              description: '',
+              isDefault: false,
+              rules: [{ hoursBefore: 48, chargePercent: 0 }, { hoursBefore: 0, chargePercent: 100 }],
+            })
+            setShowDialog(true)
+          }}
+        >
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Add Policy
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-32 w-full rounded-lg" />
+          <Skeleton className="h-32 w-full rounded-lg" />
+        </div>
+      ) : policies.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-12 text-center">
+          <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-muted-foreground">No cancellation policies</p>
+          <p className="mt-1 text-xs text-muted-foreground">Create a policy to manage cancellation fees</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {policies.map((policy) => {
+            const rules = parseRules(policy.rules)
+            return (
+              <Card key={policy.id} className={cn(!policy.isActive && 'opacity-60')}>
+                <CardContent className="p-4">
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-medium">{policy.name}</h4>
+                      {policy.isDefault && (
+                        <Badge className="bg-emerald-600 text-white text-[10px]">Default</Badge>
+                      )}
+                      {!policy.isActive && (
+                        <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(policy)}>
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </Button>
+                      {!policy.isDefault && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(policy.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {policy.description && (
+                    <p className="mb-2 text-xs text-muted-foreground">{policy.description}</p>
+                  )}
+                  <div className="space-y-1">
+                    {rules.map((rule, i) => (
+                      <div key={i} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1 text-xs">
+                        <span>
+                          {rule.hoursBefore > 0
+                            ? `${rule.hoursBefore}h+ before check-in`
+                            : 'Less than any threshold'}
+                        </span>
+                        <span className={rule.chargePercent > 0 ? 'font-medium text-destructive' : 'text-emerald-600'}>
+                          {rule.chargePercent === 0 ? 'Free' : `${rule.chargePercent}% charge`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) setEditingPolicy(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingPolicy ? 'Edit' : 'Create'} Cancellation Policy</DialogTitle>
+            <DialogDescription>Define cancellation fee rules for your bookings</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Policy Name</Label>
+              <Input
+                placeholder="e.g., Standard Flexible, Non-Refundable"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                rows={2}
+                placeholder="Brief description of this policy"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Rules</Label>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={addRule}>
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Rule
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {form.rules.map((rule, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Label className="text-[10px] text-muted-foreground">Hours before</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8"
+                        value={rule.hoursBefore}
+                        onChange={(e) => updateRule(i, 'hoursBefore', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-[10px] text-muted-foreground">Charge %</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="h-8"
+                        value={rule.chargePercent}
+                        onChange={(e) => updateRule(i, 'chargePercent', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="mt-3 h-8 w-8 text-destructive"
+                      onClick={() => removeRule(i)}
+                      disabled={form.rules.length <= 1}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Rules are evaluated top-down. The first matching rule is applied.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border p-3">
+              <input
+                type="checkbox"
+                id="isDefault"
+                checked={form.isDefault}
+                onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="isDefault" className="text-sm">Set as default policy</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowDialog(false); setEditingPolicy(null) }}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleSave}
+              disabled={saving || !form.name}
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingPolicy ? 'Update' : 'Create'} Policy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -219,6 +545,7 @@ export function SettingsView() {
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
+          <TabsTrigger value="cancellation">Cancellation</TabsTrigger>
           <TabsTrigger value="staff">Staff</TabsTrigger>
           <TabsTrigger value="plan">Plan</TabsTrigger>
         </TabsList>
@@ -526,6 +853,11 @@ export function SettingsView() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ─── Cancellation Policies ──────────────────────────────────── */}
+        <TabsContent value="cancellation">
+          <CancellationPolicyManager hotelId={currentHotelId} />
         </TabsContent>
 
         {/* ─── Staff Management ────────────────────────────────────────── */}

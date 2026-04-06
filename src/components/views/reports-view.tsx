@@ -9,6 +9,10 @@ import {
   Bed,
   DollarSign,
   CalendarDays,
+  Download,
+  FileText,
+  TrendingDown,
+  Minus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,6 +36,8 @@ import {
   LineChart,
   Line,
   Legend,
+  AreaChart,
+  Area,
 } from 'recharts'
 
 // ─── Chart Colors ────────────────────────────────────────────────────────────
@@ -49,11 +55,30 @@ const statusColors: Record<string, string> = {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+interface ForecastData {
+  totalRooms: number
+  todayOccupancy: number
+  todayBookedRooms: number
+  trendFactor: number
+  overallTrend: string
+  forecasts: Array<{
+    date: string
+    dayOfWeek: number
+    predictedOccupancy: number
+    confidence: number
+    currentBookedRooms: number
+    totalRooms: number
+    trend: string
+  }>
+}
+
 export function ReportsView() {
   const { currentHotelId, hotel } = useAppStore()
   const [occupancyData, setOccupancyData] = useState<OccupancyReportData | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueReportData | null>(null)
+  const [forecastData, setForecastData] = useState<ForecastData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reportLoading, setReportLoading] = useState<string | null>(null)
 
   // Date range — default to current month
   const now = new Date()
@@ -81,9 +106,24 @@ export function ReportsView() {
     [currentHotelId],
   )
 
+  const fetchForecast = useCallback(async () => {
+    if (!currentHotelId) return
+    try {
+      const res = await fetch(`/api/forecast/occupancy?hotelId=${currentHotelId}&days=30`)
+      const json = await res.json()
+      if (json.success) setForecastData(json.data)
+    } catch (err) {
+      console.error('Failed to fetch forecast:', err)
+    }
+  }, [currentHotelId])
+
   useEffect(() => {
     fetchReports(fromDate, toDate)
   }, [fetchReports, fromDate, toDate])
+
+  useEffect(() => {
+    fetchForecast()
+  }, [fetchForecast])
 
   const handleApplyRange = () => {
     fetchReports(fromDate, toDate)
@@ -186,7 +226,7 @@ export function ReportsView() {
         <div>
           <h2 className="text-lg font-semibold">Reports & Analytics</h2>
           <p className="text-sm text-muted-foreground">
-            Performance insights and trends
+            Performance insights, trends, and exports
           </p>
         </div>
         <div className="flex items-end gap-2">
@@ -218,6 +258,67 @@ export function ReportsView() {
             Apply
           </Button>
         </div>
+      </div>
+
+      {/* ─── PDF Export Buttons ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={reportLoading === 'daily'}
+          onClick={async () => {
+            if (!currentHotelId) return
+            setReportLoading('daily')
+            try {
+              const res = await fetch(`/api/reports/daily?hotelId=${currentHotelId}&date=${format(new Date(), 'yyyy-MM-dd')}&format=pdf`)
+              const html = await res.text()
+              const win = window.open('', '_blank')
+              if (win) { win.document.write(html); win.document.close(); }
+            } catch { /* ignore */ }
+            setReportLoading(null)
+          }}
+        >
+          <FileText className="mr-1.5 h-3.5 w-3.5" />
+          {reportLoading === 'daily' ? 'Generating...' : 'Daily Report'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={reportLoading === 'monthly'}
+          onClick={async () => {
+            if (!currentHotelId) return
+            setReportLoading('monthly')
+            try {
+              const res = await fetch(`/api/reports/monthly?hotelId=${currentHotelId}&month=${format(new Date(), 'yyyy-MM')}&format=pdf`)
+              const html = await res.text()
+              const win = window.open('', '_blank')
+              if (win) { win.document.write(html); win.document.close(); }
+            } catch { /* ignore */ }
+            setReportLoading(null)
+          }}
+        >
+          <FileText className="mr-1.5 h-3.5 w-3.5" />
+          {reportLoading === 'monthly' ? 'Generating...' : 'Monthly Report'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={reportLoading === 'financial'}
+          onClick={async () => {
+            if (!currentHotelId) return
+            setReportLoading('financial')
+            try {
+              const res = await fetch(`/api/reports/financial?hotelId=${currentHotelId}&from=${fromDate}&to=${toDate}&format=pdf`)
+              const html = await res.text()
+              const win = window.open('', '_blank')
+              if (win) { win.document.write(html); win.document.close(); }
+            } catch { /* ignore */ }
+            setReportLoading(null)
+          }}
+        >
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          {reportLoading === 'financial' ? 'Generating...' : 'Financial Report'}
+        </Button>
       </div>
 
       {/* Key Metrics */}
@@ -509,6 +610,85 @@ export function ReportsView() {
           </div>
         )}
       </div>
+
+      {/* ─── Occupancy Forecast Chart ──────────────────────────────────── */}
+      {forecastData && forecastData.forecasts.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Occupancy Forecast (Next 30 Days)
+                </CardTitle>
+                <CardDescription>
+                  Today: {forecastData.todayOccupancy}% occupied ({forecastData.todayBookedRooms}/{forecastData.totalRooms} rooms) &middot; Trend:{' '}
+                  <span className={cn(
+                    forecastData.overallTrend === 'increasing' && 'text-emerald-600',
+                    forecastData.overallTrend === 'decreasing' && 'text-red-600',
+                  )}>
+                    {forecastData.overallTrend}
+                  </span>
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={forecastData.forecasts.map((f) => ({
+                      date: f.date.slice(5),
+                      predicted: f.predictedOccupancy,
+                      confidence: f.confidence,
+                      booked: f.currentBookedRooms,
+                    }))}
+                    margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} className="text-muted-foreground" interval={4} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(v) => `${v}%`} />
+                    <RechartsTooltip
+                      formatter={(value: number, name: string) => [
+                        name === 'predicted' ? `${value}%` : value,
+                        name === 'predicted' ? 'Predicted Occupancy' : 'Booked Rooms',
+                      ]}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="predicted"
+                      stroke="#8B5CF6"
+                      strokeWidth={2}
+                      fill="url(#forecastGrad)"
+                      name="Predicted %"
+                    />
+                    <Line
+                      type="stepAfter"
+                      dataKey="booked"
+                      stroke="#10B981"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      name="Confirmed Bookings"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

@@ -243,6 +243,7 @@ export async function POST() {
             data: {
               hotelId: hotel.id,
               bookingId: booking.id,
+              guestId: guest.id,
               amount: totalPrice,
               currency: hotel.currency,
               method: bd.channelIdx === 0 ? 'cash' : 'mobile_money',
@@ -255,6 +256,93 @@ export async function POST() {
         bookings.push(booking);
       }
 
+      // Create Cancellation Policies
+      await Promise.all([
+        tx.cancellationPolicy.create({
+          data: {
+            hotelId: hotel.id, name: 'Flexible', isDefault: true,
+            rules: JSON.stringify([{ hoursBefore: 48, chargePercent: 0 }, { hoursBefore: 0, chargePercent: 100 }]),
+          },
+        }),
+        tx.cancellationPolicy.create({
+          data: {
+            hotelId: hotel.id, name: 'Moderate',
+            rules: JSON.stringify([{ hoursBefore: 168, chargePercent: 0 }, { hoursBefore: 48, chargePercent: 50 }, { hoursBefore: 0, chargePercent: 100 }]),
+          },
+        }),
+        tx.cancellationPolicy.create({
+          data: {
+            hotelId: hotel.id, name: 'Strict - Non Refundable',
+            rules: JSON.stringify([{ hoursBefore: 999999, chargePercent: 100 }]),
+          },
+        }),
+      ]);
+
+      // Create Dynamic Rate Rules
+      await Promise.all([
+        tx.dynamicRateRule.create({
+          data: {
+            hotelId: hotel.id, name: 'High Season Peak', ruleType: 'seasonal',
+            adjustmentType: 'percentage', adjustmentValue: 25,
+            validFrom: new Date(today.getFullYear(), 5, 1), validTo: new Date(today.getFullYear(), 8, 31),
+            priority: 10,
+          },
+        }),
+        tx.dynamicRateRule.create({
+          data: {
+            hotelId: hotel.id, name: 'Weekend Surcharge', ruleType: 'day_of_week',
+            adjustmentType: 'percentage', adjustmentValue: 10,
+            daysOfWeek: JSON.stringify([5, 6]), // Fri, Sat
+            priority: 5,
+          },
+        }),
+        tx.dynamicRateRule.create({
+          data: {
+            hotelId: hotel.id, name: 'High Occupancy Premium', ruleType: 'occupancy_based',
+            adjustmentType: 'percentage', adjustmentValue: 20,
+            minOccupancy: 80, priority: 8,
+          },
+        }),
+      ]);
+
+      // Create Coupons
+      await Promise.all([
+        tx.coupon.create({
+          data: {
+            hotelId: hotel.id, code: 'WELCOME10', type: 'percentage', value: 10,
+            maxUses: 100, validFrom: today, validTo: addDays(today, 90),
+          },
+        }),
+        tx.coupon.create({
+          data: {
+            hotelId: hotel.id, code: 'LONGSTAY', type: 'percentage', value: 15,
+            minStay: 5, validFrom: today, validTo: addDays(today, 180),
+          },
+        }),
+      ]);
+
+      // Create Housekeeping Tasks
+      await Promise.all([
+        tx.housekeepingTask.create({
+          data: {
+            hotelId: hotel.id, roomId: rooms[0].id, taskType: 'clean', priority: 'high',
+            status: 'pending', title: 'Checkout clean - Room 101', dueDate: today, dueTime: '12:00',
+          },
+        }),
+        tx.housekeepingTask.create({
+          data: {
+            hotelId: hotel.id, roomId: rooms[1].id, taskType: 'turndown', priority: 'low',
+            status: 'pending', title: 'Evening turndown - Room 201', dueDate: today, dueTime: '17:00',
+          },
+        }),
+        tx.housekeepingTask.create({
+          data: {
+            hotelId: hotel.id, roomId: rooms[2].id, taskType: 'deep_clean', priority: 'medium',
+            status: 'in_progress', title: 'Deep clean - Room 202', dueDate: today, assignedTo: user.id,
+          },
+        }),
+      ]);
+
       // Create a maintenance block
       await tx.availabilityBlock.create({
         data: {
@@ -266,6 +354,35 @@ export async function POST() {
           blockType: 'maintenance',
           reason: 'AC repair and room repainting',
           isActive: true,
+        },
+      });
+
+      // Create sample reviews
+      await tx.review.create({
+        data: {
+          hotelId: hotel.id, bookingId: bookings[2].id, guestId: guests[2].id,
+          overallRating: 5, cleanliness: 5, service: 5, location: 4, value: 5,
+          comment: 'Excellent stay! The staff was incredibly friendly and the room was spotless. Will definitely return.',
+          respondedAt: subDays(today, 2),
+          response: 'Thank you Amina! We are thrilled you enjoyed your stay. Looking forward to welcoming you back!',
+        },
+      });
+      await tx.review.create({
+        data: {
+          hotelId: hotel.id, bookingId: bookings[0].id, guestId: guests[0].id,
+          overallRating: 4, cleanliness: 4, service: 5, location: 4, value: 3,
+          comment: 'Great hotel, wonderful service. The ocean view from the suite is breathtaking. Slightly pricey but worth it.',
+        },
+      });
+
+      // Create a sample invoice
+      const invNum = `INV-${format(today, 'yyyy')}-${String(1).padStart(4, '0')}`;
+      await tx.invoice.create({
+        data: {
+          hotelId: hotel.id, bookingId: bookings[2].id, guestId: guests[2].id,
+          invoiceNumber: invNum, status: 'paid',
+          subtotal: 130000 * 3, taxRate: 18, taxAmount: 130000 * 3 * 0.18,
+          totalAmount: 130000 * 3 * 1.18, currency: hotel.currency, paidAt: addDays(today, -1),
         },
       });
 

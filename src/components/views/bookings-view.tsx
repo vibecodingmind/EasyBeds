@@ -10,6 +10,11 @@ import {
   LogOut,
   XCircle,
   MoreHorizontal,
+  Edit3,
+  Loader2,
+  CalendarDays,
+  BedDouble,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -43,8 +48,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
-import { useAppStore, type BookingStatus } from '@/lib/store'
+import { Label } from '@/components/ui/label'
+import { useAppStore, type BookingStatus, type ApiBooking } from '@/lib/store'
 import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -83,6 +90,52 @@ export function BookingsView() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [channelFilter, setChannelFilter] = useState<string>('all')
+
+  // Modify booking dialog
+  const [modifyingBooking, setModifyingBooking] = useState<ApiBooking | null>(null)
+  const [modifyForm, setModifyForm] = useState({
+    checkIn: '',
+    checkOut: '',
+    roomId: '',
+  })
+  const [modifying, setModifying] = useState(false)
+  const { rooms } = useAppStore()
+
+  const handleOpenModify = (booking: ApiBooking) => {
+    setModifyingBooking(booking)
+    setModifyForm({
+      checkIn: format(parseISO(booking.checkInDate), 'yyyy-MM-dd'),
+      checkOut: format(parseISO(booking.checkOutDate), 'yyyy-MM-dd'),
+      roomId: booking.roomId,
+    })
+  }
+
+  const handleModify = async () => {
+    if (!currentHotelId || !modifyingBooking) return
+    setModifying(true)
+    try {
+      const res = await fetch(
+        `/api/bookings/${modifyingBooking.id}/modify?hotelId=${currentHotelId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(modifyForm),
+        }
+      )
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Booking modified successfully')
+        setModifyingBooking(null)
+        fetchBookings()
+      } else {
+        toast.error(json.error || 'Failed to modify booking')
+      }
+    } catch {
+      toast.error('Failed to modify booking')
+    } finally {
+      setModifying(false)
+    }
+  }
 
   const filteredBookings = useMemo(() => {
     return bookings.filter((b) => {
@@ -283,6 +336,17 @@ export function BookingsView() {
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
+                            {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenModify(booking)
+                                }}
+                              >
+                                <Edit3 className="mr-2 h-4 w-4" />
+                                Modify Booking
+                              </DropdownMenuItem>
+                            )}
                             {booking.status === 'confirmed' && (
                               <DropdownMenuItem
                                 onClick={(e) => {
@@ -500,10 +564,113 @@ export function BookingsView() {
                       Confirm Booking
                     </Button>
                   )}
+                  {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleOpenModify(selectedBooking)}
+                    >
+                      <Edit3 className="mr-2 h-4 w-4" />
+                      Modify
+                    </Button>
+                  )}
                 </div>
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modify Booking Dialog */}
+      <Dialog open={!!modifyingBooking} onOpenChange={() => setModifyingBooking(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5" />
+              Modify Booking
+            </DialogTitle>
+            <DialogDescription>
+              Change dates or room for this booking
+            </DialogDescription>
+          </DialogHeader>
+          {modifyingBooking && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="font-medium">{modifyingBooking.confirmationCode}</p>
+                <p className="text-muted-foreground">
+                  {modifyingBooking.guest?.firstName} {modifyingBooking.guest?.lastName} &bull;{' '}
+                  Room {modifyingBooking.room?.roomNumber}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Check-in Date
+                </Label>
+                <Input
+                  type="date"
+                  value={modifyForm.checkIn}
+                  onChange={(e) =>
+                    setModifyForm({ ...modifyForm, checkIn: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Check-out Date
+                </Label>
+                <Input
+                  type="date"
+                  value={modifyForm.checkOut}
+                  onChange={(e) =>
+                    setModifyForm({ ...modifyForm, checkOut: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <BedDouble className="h-3.5 w-3.5" />
+                  Room
+                </Label>
+                <Select
+                  value={modifyForm.roomId}
+                  onValueChange={(v) => setModifyForm({ ...modifyForm, roomId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select room" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rooms
+                      .filter((r) => r.isActive)
+                      .map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.roomNumber} — {r.name} ({r.type}) —{' '}
+                          {currencySymbol}{r.basePrice}/night
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModifyingBooking(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleModify}
+              disabled={modifying}
+            >
+              {modifying ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </motion.div>
