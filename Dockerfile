@@ -9,7 +9,7 @@ RUN npm install -g bun && bun install --frozen-lockfile
 # Generate Prisma client
 FROM deps AS prisma
 COPY prisma ./prisma/
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 # Build Next.js
 FROM prisma AS builder
