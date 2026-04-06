@@ -91,39 +91,42 @@ const PLAN_TIERS = {
     ],
     cta: 'Current Plan',
   },
-  professional: {
-    name: 'Professional',
-    price: '$79',
-    priceNum: 79,
-    description: 'For growing properties that need more',
+  starter: {
+    name: 'Starter',
+    price: '$49',
+    priceNum: 49,
+    description: 'For small properties ready to grow',
     features: [
-      'Unlimited rooms',
+      'Up to 25 rooms',
       'Unlimited bookings',
-      '10 channel connections',
-      'Two-way sync',
-      'Full reports & analytics',
-      'Staff management',
-      'API access',
+      '5 channel connections',
+      'Two-way iCal sync',
+      'Email notifications',
+      'Housekeeping management',
+      'Staff accounts (up to 3)',
       'Priority support',
     ],
     cta: 'Upgrade',
   },
-  enterprise: {
-    name: 'Enterprise',
-    price: '$199',
-    priceNum: 199,
-    description: 'For hotel groups and chains',
+  pro: {
+    name: 'Professional',
+    price: '$99',
+    priceNum: 99,
+    description: 'For growing properties that need the full suite',
     features: [
-      'Everything in Professional',
-      'Multi-property support',
-      'Custom integrations',
-      'Dedicated account manager',
-      'White-label options',
-      'SLA guarantee',
-      'Training & onboarding',
-      '24/7 phone support',
+      'Unlimited rooms',
+      'Unlimited bookings',
+      'Unlimited channels',
+      'Full reports & analytics',
+      'Dynamic pricing',
+      'AI concierge',
+      'Guest portal & self check-in',
+      'Loyalty program',
+      'API access',
+      'Unlimited staff',
+      '24/7 support',
     ],
-    cta: 'Contact Sales',
+    cta: 'Current Plan',
   },
 } as const
 
@@ -1012,8 +1015,8 @@ export function SettingsView() {
               {/* Current Plan */}
               <Card
                 className={cn(
-                  currentPlan === 'professional' && 'border-emerald-200 bg-emerald-50/50',
-                  currentPlan === 'enterprise' && 'border-purple-200 bg-purple-50/50',
+                  currentPlan === 'pro' && 'border-emerald-200 bg-emerald-50/50',
+                  currentPlan === 'starter' && 'border-blue-200 bg-blue-50/50',
                 )}
               >
                 <CardHeader>
@@ -1022,18 +1025,22 @@ export function SettingsView() {
                       <Crown
                         className={cn(
                           'h-4 w-4',
-                          currentPlan === 'enterprise'
-                            ? 'text-purple-600'
-                            : 'text-emerald-600',
+                          currentPlan === 'pro'
+                            ? 'text-emerald-600'
+                            : currentPlan === 'starter'
+                              ? 'text-blue-600'
+                              : 'text-gray-600',
                         )}
                       />
                       {PLAN_TIERS[currentPlan].name} Plan
                     </CardTitle>
                     <Badge
                       className={cn(
-                        currentPlan === 'enterprise'
-                          ? 'bg-purple-600'
-                          : 'bg-emerald-600',
+                        currentPlan === 'pro'
+                          ? 'bg-emerald-600'
+                          : currentPlan === 'starter'
+                            ? 'bg-blue-600'
+                            : 'bg-gray-600',
                         'text-white',
                       )}
                     >

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { renderTemplate, EMAIL_TEMPLATES, type TemplateKey, type EmailTemplateInfo } from '@/lib/email-templates';
+import { sendEmail } from '@/lib/email';
 
 // =============================================================================
 // Notification Service — EasyBeds
@@ -137,15 +138,36 @@ export async function sendNotification(input: SendNotificationInput): Promise<No
 
   // Determine notification status
   let status: 'pending' | 'sent' | 'failed' = 'sent';
+  let externalRef: string | undefined;
+  let errorMessage: string | null = null;
 
   // For email, check if email is enabled
   if (channel === 'email' && !hotel.emailEnabled) {
     status = 'failed';
+    errorMessage = 'Email notifications are disabled for this hotel.';
   }
 
   // For WhatsApp, check if WhatsApp is enabled
   if (channel === 'whatsapp' && !hotel.whatsappEnabled) {
     status = 'failed';
+    errorMessage = 'WhatsApp notifications are disabled for this hotel.';
+  }
+
+  // For email channel with a valid recipient, attempt actual delivery via Resend
+  if (channel === 'email' && status !== 'failed' && toAddress && bodyHtml) {
+    const emailResult = await sendEmail({
+      to: toAddress,
+      subject,
+      html: bodyHtml,
+    });
+
+    if (emailResult.success) {
+      externalRef = emailResult.messageId;
+      status = 'sent';
+    } else {
+      status = 'failed';
+      errorMessage = emailResult.error || 'Email delivery failed.';
+    }
   }
 
   // Create notification record
@@ -162,12 +184,9 @@ export async function sendNotification(input: SendNotificationInput): Promise<No
       body: bodyText,
       bodyHtml,
       toAddress,
+      externalRef: externalRef || null,
       sentAt: status === 'sent' ? new Date() : null,
-      errorMessage: status === 'failed'
-        ? channel === 'email' ? 'Email notifications are disabled for this hotel.'
-        : channel === 'whatsapp' ? 'WhatsApp notifications are disabled for this hotel.'
-        : null
-        : null,
+      errorMessage,
     },
   });
 
@@ -232,6 +251,31 @@ export async function sendPaymentReceipt(input: {
 
   const rendered = renderTemplate('payment_receipt', templateData);
 
+  const recipientAddress = booking.guest.email || booking.guest.phone || null;
+  let externalRef: string | null = null;
+  let notificationStatus: 'pending' | 'sent' | 'failed' = 'sent';
+  let notifErrorMessage: string | null = null;
+
+  // For email channel, attempt actual delivery via Resend
+  if (channel === 'email' && hotel.emailEnabled && recipientAddress) {
+    const emailResult = await sendEmail({
+      to: recipientAddress,
+      subject: rendered.subject,
+      html: rendered.html,
+    });
+
+    if (emailResult.success) {
+      externalRef = emailResult.messageId || null;
+      notificationStatus = 'sent';
+    } else {
+      notificationStatus = 'failed';
+      notifErrorMessage = emailResult.error || 'Email delivery failed.';
+    }
+  } else if (channel === 'email' && !hotel.emailEnabled) {
+    notificationStatus = 'failed';
+    notifErrorMessage = 'Email notifications are disabled for this hotel.';
+  }
+
   const notification = await db.notification.create({
     data: {
       hotelId,
@@ -239,12 +283,14 @@ export async function sendPaymentReceipt(input: {
       guestId: booking.guestId,
       type: 'payment_receipt',
       channel,
-      status: 'sent',
+      status: notificationStatus,
       subject: rendered.subject,
       body: rendered.text,
       bodyHtml: rendered.html,
-      toAddress: booking.guest.email || booking.guest.phone || null,
-      sentAt: new Date(),
+      toAddress: recipientAddress,
+      externalRef,
+      sentAt: notificationStatus === 'sent' ? new Date() : null,
+      errorMessage: notifErrorMessage,
     },
   });
 

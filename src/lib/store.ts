@@ -36,6 +36,7 @@ export type ViewType =
   | 'night_audit'
   | 'settings'
 
+export type { ApiBooking } from './api'
 export type BookingStatus = ApiBooking['status']
 
 // Backward-compatible type aliases so existing components can be migrated

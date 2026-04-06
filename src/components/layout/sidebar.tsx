@@ -16,7 +16,6 @@ import {
   Sparkles,
   ShieldCheck,
   Star,
-  MessageCircle,
   Activity,
   TrendingUp,
   Scale,
@@ -74,7 +73,6 @@ const navSections: NavSection[] = [
       { view: 'concierge', label: 'AI Concierge', icon: Sparkles },
       { view: 'reviews', label: 'Reviews', icon: Star },
       { view: 'loyalty', label: 'Loyalty', icon: ShieldCheck },
-      { view: 'messages', label: 'Messages', icon: MessageCircle },
     ],
   },
 ]

@@ -301,7 +301,7 @@ export function HousekeepingView() {
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="p-3 text-center">
             <p className="text-2xl font-bold text-amber-700">
-              getColumnTasks('pending').length
+              {getColumnTasks('pending').length}
             </p>
             <p className="text-xs text-amber-600">Pending</p>
           </CardContent>
