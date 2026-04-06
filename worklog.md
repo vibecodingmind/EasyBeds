@@ -1,82 +1,36 @@
-# EasyBeds — Hotel Booking & Channel Management SaaS
-## Worklog
-
 ---
-Task ID: 1
-Agent: Main Coordinator
-Task: Plan and design complete multi-tenant SaaS architecture
+Task ID: 5
+Agent: Frontend Views Agent (4 parallel agents)
+Task: Rewrite all 13 frontend components to use real API instead of mock data
 
 Work Log:
-- Analyzed 10-section MVP blueprint for EasyBeds hotel management platform
-- Designed multi-tenant database schema with 12 tables
-- Planned tech stack: Next.js 16 + Prisma + SQLite + shadcn/ui + Tailwind CSS
-- Identified key features: booking engine, availability calendar, channel management, reports
+- Agent 1: Rewrote login-view.tsx (real auth API), sidebar.tsx (hotel name from store), header.tsx (user/hotel from store, working logout)
+- Agent 2: Rewrote dashboard-view.tsx (dashboardStats from API), bookings-view.tsx (checkInDate/guest.room fields), new-booking-dialog.tsx (creates real bookings via API with guest creation), booking-details-dialog.tsx (status actions via API)
+- Agent 3: Rewrote rooms-view.tsx (parseAmenities, deriveRoomStatus), guests-view.tsx (server-side search with debounce), channels-view.tsx (sync status, iCal URL, commission)
+- Agent 4: Rewrote calendar-view.tsx (Gantt-chart with all block types, tooltips), reports-view.tsx (4 recharts from API data with date range), settings-view.tsx (hotel update via API)
+- All agents: Removed ALL @/lib/mock-data imports, added loading skeletons, sonner toasts
 
 Stage Summary:
-- Architecture designed for multi-tenant SaaS from day one (hotels table as top-level tenant)
-- Database schema finalized with: Hotel, HotelUser, User, Room, Guest, Channel, Booking, AvailabilityBlock, RatePlan, Payment, SyncLog
-
----
-Task ID: 2
-Agent: API Backend Agent
-Task: Build all backend API routes
-
-Work Log:
-- Created 20 API route files covering auth, hotels, rooms, bookings, guests, channels, availability, reports, dashboard, seed
-- Implemented atomic booking engine with $transaction() for Booking + AvailabilityBlock
-- Built double-booking prevention with overlap query
-- Implemented iCal feed generation for channel export
-- Created comprehensive seed data endpoint
-- All routes use multi-tenant filtering (hotelId)
+- 13 component files rewritten to use real API data
+- Zero mock-data imports across entire frontend
 - Zero ESLint errors
-
-Stage Summary:
-- 20 API route files created
-- Critical booking engine with transaction-based availability checking
-- Auth routes (register/login) with JWT
-- Full CRUD for rooms, bookings, guests, channels
-- Reports: occupancy and revenue endpoints
-- Seed endpoint creates demo data (6 rooms, 7 channels, 6 guests, 7 bookings)
+- All API endpoints returning 200 OK
+- Dev server compiling cleanly
 
 ---
-Task ID: 3
-Agent: Frontend UI Agent
-Task: Build complete frontend dashboard
-
-Work Log:
-- Created Zustand store for global state management
-- Built 8 view components: Login, Dashboard, Calendar, Bookings, Rooms, Guests, Channels, Reports, Settings
-- Built layout components: Sidebar navigation, Header with search
-- Built booking components: New Booking Dialog (4-step wizard), Booking Details Dialog
-- Created comprehensive mock data (1 hotel, 6 rooms, 10 guests, 18 bookings, 5 channels)
-- Professional emerald/teal color scheme
-- Framer Motion animations for view transitions
-- Responsive design for mobile, tablet, desktop
-
-Stage Summary:
-- 16 new component files created
-- Single-page app with client-side view switching
-- Login page with branding panel and signup dialog
-- Dashboard with stats cards, recent bookings, upcoming arrivals, room status grid
-- Calendar view with Gantt-chart booking bars
-- Reports with 4 chart types (occupancy, revenue pie, revenue trend, bookings)
-- All views functional with mock data
-
----
-Task ID: 4
+Task ID: 6
 Agent: Main Coordinator
-Task: Integration testing and verification
+Task: Final verification and completion
 
 Work Log:
-- Ran lint check — zero errors
-- Pushed Prisma schema to SQLite database
-- Seeded demo data successfully (hotel: Paradise Court Hotel)
-- Verified API endpoints: /api/rooms (200), /api/bookings (200), /api/dashboard (200)
-- Verified main page loads (HTTP 200)
-- Dev server running without errors
+- Ran `bun run lint` — zero errors
+- Verified dev server: GET / returns 200
+- Verified all APIs working: /api/dashboard, /api/rooms, /api/bookings, /api/channels, /api/availability
+- App loads with login screen, authenticates with demo credentials, fetches real data
 
 Stage Summary:
-- All APIs verified working
-- Demo credentials: demo@easybeds.com / demo123
-- Hotel ID: cmnmzrhjh0001qdpb1sgdtodj
-- Application compiles and runs cleanly
+- Complete EasyBeds SaaS platform built and verified
+- Full-stack: 20 API routes + 13 view components + API client + Zustand store
+- All connected to real database (SQLite + Prisma)
+- Demo data seeded: Paradise Court Hotel, 6 rooms, 7 bookings, 6 guests, 7 channels
+- Login: demo@easybeds.com / demo123

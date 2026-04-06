@@ -1,10 +1,9 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Search,
-  Filter,
   Plus,
   Eye,
   LogIn,
@@ -12,10 +11,11 @@ import {
   XCircle,
   MoreHorizontal,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -45,16 +45,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { useAppStore, type BookingStatus } from '@/lib/store'
-import {
-  mockBookings,
-  mockChannels,
-  getGuestById,
-  getRoomById,
-  getChannelById,
-  type MockBooking,
-} from '@/lib/mock-data'
 import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const statusColors: Record<string, string> = {
   confirmed: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -62,44 +55,69 @@ const statusColors: Record<string, string> = {
   checked_in: 'bg-blue-100 text-blue-700 border-blue-200',
   checked_out: 'bg-gray-100 text-gray-600 border-gray-200',
   cancelled: 'bg-red-100 text-red-700 border-red-200',
+  no_show: 'bg-orange-100 text-orange-700 border-orange-200',
 }
 
 export function BookingsView() {
   const {
     bookings,
+    channels,
     selectedBookingId,
     setSelectedBookingId,
     setShowNewBookingDialog,
     updateBookingStatus,
+    fetchBookings,
+    fetchChannels,
+    loading,
+    currentHotelId,
+    hotel,
   } = useAppStore()
 
-  const allBookings = bookings.length > 0 ? bookings : mockBookings
+  useEffect(() => {
+    if (currentHotelId) {
+      fetchBookings()
+      fetchChannels()
+    }
+  }, [currentHotelId, fetchBookings, fetchChannels])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [channelFilter, setChannelFilter] = useState<string>('all')
 
   const filteredBookings = useMemo(() => {
-    return allBookings.filter((b) => {
-      const guest = getGuestById(b.guestId)
+    return bookings.filter((b) => {
+      const guestName = `${b.guest?.firstName || ''} ${b.guest?.lastName || ''}`.toLowerCase()
       const matchesSearch =
         !searchQuery ||
         b.confirmationCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        guest?.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        guest?.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        getRoomById(b.roomId)?.number.includes(searchQuery)
+        guestName.includes(searchQuery.toLowerCase()) ||
+        (b.room?.roomNumber || '').includes(searchQuery)
 
-      const matchesStatus =
-        statusFilter === 'all' || b.status === statusFilter
+      const matchesStatus = statusFilter === 'all' || b.status === statusFilter
 
-      const matchesChannel =
-        channelFilter === 'all' || b.channel === channelFilter
+      const matchesChannel = channelFilter === 'all' || b.channelId === channelFilter
 
       return matchesSearch && matchesStatus && matchesChannel
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [allBookings, searchQuery, statusFilter, channelFilter])
+    })
+  }, [bookings, searchQuery, statusFilter, channelFilter])
 
-  const selectedBooking = allBookings.find((b) => b.id === selectedBookingId)
+  const selectedBooking = bookings.find((b) => b.id === selectedBookingId) || null
+
+  const handleStatusUpdate = async (id: string, status: BookingStatus) => {
+    try {
+      const success = await updateBookingStatus(id, status)
+      if (success) {
+        toast.success(`Booking ${status.replace(/_/g, ' ')} successfully`)
+      } else {
+        toast.error('Failed to update booking status')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update booking')
+    }
+  }
+
+  const currencySymbol =
+    hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
 
   return (
     <motion.div
@@ -156,7 +174,7 @@ export function BookingsView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Channels</SelectItem>
-                {mockChannels.map((ch) => (
+                {channels.map((ch) => (
                   <SelectItem key={ch.id} value={ch.id}>
                     {ch.name}
                   </SelectItem>
@@ -170,34 +188,39 @@ export function BookingsView() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Confirmation</TableHead>
-                <TableHead>Guest</TableHead>
-                <TableHead className="hidden sm:table-cell">Room</TableHead>
-                <TableHead className="hidden md:table-cell">Check-in</TableHead>
-                <TableHead className="hidden md:table-cell">Check-out</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Channel</TableHead>
-                <TableHead className="hidden lg:table-cell">Total</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBookings.length === 0 ? (
+          {loading.bookings && bookings.length === 0 ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    No bookings found
-                  </TableCell>
+                  <TableHead>Confirmation</TableHead>
+                  <TableHead>Guest</TableHead>
+                  <TableHead className="hidden sm:table-cell">Room</TableHead>
+                  <TableHead className="hidden md:table-cell">Check-in</TableHead>
+                  <TableHead className="hidden md:table-cell">Check-out</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Channel</TableHead>
+                  <TableHead className="hidden lg:table-cell">Total</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
-              ) : (
-                filteredBookings.map((booking) => {
-                  const guest = getGuestById(booking.guestId)
-                  const room = getRoomById(booking.roomId)
-                  const channel = getChannelById(booking.channel)
-
-                  return (
+              </TableHeader>
+              <TableBody>
+                {filteredBookings.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      No bookings found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredBookings.map((booking) => (
                     <TableRow
                       key={booking.id}
                       className="cursor-pointer"
@@ -207,48 +230,36 @@ export function BookingsView() {
                         {booking.confirmationCode}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {guest?.vip && (
-                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] text-amber-700 px-1">
-                              VIP
-                            </Badge>
-                          )}
-                          <span className="text-sm font-medium">
-                            {guest?.firstName} {guest?.lastName}
-                          </span>
-                        </div>
+                        <span className="text-sm font-medium">
+                          {booking.guest?.firstName} {booking.guest?.lastName}
+                        </span>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {room?.number} - {room?.name}
+                        {booking.room?.roomNumber} - {booking.room?.name}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {format(parseISO(booking.checkIn), 'MMM d, yyyy')}
+                        {format(parseISO(booking.checkInDate), 'MMM d, yyyy')}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {format(parseISO(booking.checkOut), 'MMM d, yyyy')}
+                        {format(parseISO(booking.checkOutDate), 'MMM d, yyyy')}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
                           className={cn(
                             'text-xs capitalize',
-                            statusColors[booking.status]
+                            statusColors[booking.status],
                           )}
                         >
-                          {booking.status.replace('_', ' ')}
+                          {booking.status.replace(/_/g, ' ')}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: channel?.color }}
-                          />
-                          <span className="text-sm">{channel?.name}</span>
-                        </div>
+                        <span className="text-sm">{booking.channel?.name || '—'}</span>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell font-medium">
-                        ${booking.totalPrice}
+                        {currencySymbol}
+                        {booking.totalPrice.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -276,7 +287,7 @@ export function BookingsView() {
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  updateBookingStatus(booking.id, 'checked_in')
+                                  handleStatusUpdate(booking.id, 'checked_in')
                                 }}
                               >
                                 <LogIn className="mr-2 h-4 w-4" />
@@ -287,19 +298,20 @@ export function BookingsView() {
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  updateBookingStatus(booking.id, 'checked_out')
+                                  handleStatusUpdate(booking.id, 'checked_out')
                                 }}
                               >
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Check Out
                               </DropdownMenuItem>
                             )}
-                            {(booking.status === 'confirmed' || booking.status === 'pending') && (
+                            {(booking.status === 'confirmed' ||
+                              booking.status === 'pending') && (
                               <DropdownMenuItem
                                 className="text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  updateBookingStatus(booking.id, 'cancelled')
+                                  handleStatusUpdate(booking.id, 'cancelled')
                                 }}
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
@@ -310,11 +322,11 @@ export function BookingsView() {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -324,152 +336,174 @@ export function BookingsView() {
         onOpenChange={(open) => !open && setSelectedBookingId(null)}
       >
         <DialogContent className="max-w-lg">
-          {selectedBooking && (() => {
-            const guest = getGuestById(selectedBooking.guestId)
-            const room = getRoomById(selectedBooking.roomId)
-            const channel = getChannelById(selectedBooking.channel)
+          {selectedBooking && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  Booking Details
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs capitalize',
+                      statusColors[selectedBooking.status],
+                    )}
+                  >
+                    {selectedBooking.status.replace(/_/g, ' ')}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedBooking.confirmationCode}
+                </DialogDescription>
+              </DialogHeader>
 
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3">
-                    Booking Details
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'text-xs capitalize',
-                        statusColors[selectedBooking.status]
-                      )}
-                    >
-                      {selectedBooking.status.replace('_', ' ')}
-                    </Badge>
-                  </DialogTitle>
-                  <DialogDescription>
-                    {selectedBooking.confirmationCode}
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-2">
-                  {/* Guest */}
-                  <div className="rounded-lg border p-3">
-                    <h4 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-                      Guest Information
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Name</span>
-                        <p className="font-medium">
-                          {guest?.firstName} {guest?.lastName}
-                          {guest?.vip && (
-                            <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-[10px] text-amber-700 px-1">
-                              VIP
-                            </Badge>
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Email</span>
-                        <p className="font-medium">{guest?.email}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Phone</span>
-                        <p className="font-medium">{guest?.phone}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Nationality</span>
-                        <p className="font-medium">{guest?.nationality}</p>
-                      </div>
+              <div className="space-y-4 py-2">
+                {/* Guest */}
+                <div className="rounded-lg border p-3">
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Guest Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Name</span>
+                      <p className="font-medium">
+                        {selectedBooking.guest?.firstName}{' '}
+                        {selectedBooking.guest?.lastName}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Booking */}
-                  <div className="rounded-lg border p-3">
-                    <h4 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-                      Booking Information
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Room</span>
-                        <p className="font-medium">{room?.number} - {room?.name}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Channel</span>
-                        <p className="flex items-center gap-1 font-medium">
-                          <span
-                            className="inline-block h-2 w-2 rounded-full"
-                            style={{ backgroundColor: channel?.color }}
-                          />
-                          {channel?.name}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Check-in</span>
-                        <p className="font-medium">{format(parseISO(selectedBooking.checkIn), 'MMM d, yyyy')}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Check-out</span>
-                        <p className="font-medium">{format(parseISO(selectedBooking.checkOut), 'MMM d, yyyy')}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Guests</span>
-                        <p className="font-medium">{selectedBooking.adults} adults{selectedBooking.children > 0 ? `, ${selectedBooking.children} children` : ''}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Total</span>
-                        <p className="text-lg font-bold">${selectedBooking.totalPrice}</p>
-                      </div>
+                    <div>
+                      <span className="text-muted-foreground">Email</span>
+                      <p className="font-medium">
+                        {selectedBooking.guest?.email || '—'}
+                      </p>
                     </div>
-                    {selectedBooking.specialRequests && (
-                      <div className="mt-3">
-                        <span className="text-muted-foreground text-sm">Special Requests</span>
-                        <p className="mt-1 text-sm">{selectedBooking.specialRequests}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
-                    {selectedBooking.status === 'confirmed' && (
-                      <Button
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        onClick={() => updateBookingStatus(selectedBooking.id, 'checked_in')}
-                      >
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Check In Guest
-                      </Button>
-                    )}
-                    {selectedBooking.status === 'checked_in' && (
-                      <Button
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => updateBookingStatus(selectedBooking.id, 'checked_out')}
-                      >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Check Out Guest
-                      </Button>
-                    )}
-                    {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'pending') && (
-                      <Button
-                        variant="destructive"
-                        className="flex-1"
-                        onClick={() => updateBookingStatus(selectedBooking.id, 'cancelled')}
-                      >
-                        <XCircle className="mr-2 h-4 w-4" />
-                        Cancel Booking
-                      </Button>
-                    )}
-                    {(selectedBooking.status === 'pending') && (
-                      <Button
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => updateBookingStatus(selectedBooking.id, 'confirmed')}
-                      >
-                        Confirm Booking
-                      </Button>
-                    )}
+                    <div>
+                      <span className="text-muted-foreground">Phone</span>
+                      <p className="font-medium">
+                        {selectedBooking.guest?.phone || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Guests</span>
+                      <p className="font-medium">
+                        {selectedBooking.numGuests} guest
+                        {selectedBooking.numGuests !== 1 ? 's' : ''}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </>
-            )
-          })()}
+
+                {/* Booking */}
+                <div className="rounded-lg border p-3">
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Booking Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Room</span>
+                      <p className="font-medium">
+                        {selectedBooking.room?.roomNumber} -{' '}
+                        {selectedBooking.room?.name}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Channel</span>
+                      <p className="font-medium">
+                        {selectedBooking.channel?.name || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Check-in</span>
+                      <p className="font-medium">
+                        {format(
+                          parseISO(selectedBooking.checkInDate),
+                          'MMM d, yyyy',
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Check-out</span>
+                      <p className="font-medium">
+                        {format(
+                          parseISO(selectedBooking.checkOutDate),
+                          'MMM d, yyyy',
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Nights</span>
+                      <p className="font-medium">{selectedBooking.numNights}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total</span>
+                      <p className="text-lg font-bold">
+                        {currencySymbol}
+                        {selectedBooking.totalPrice.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedBooking.specialRequests && (
+                    <div className="mt-3">
+                      <span className="text-muted-foreground text-sm">
+                        Special Requests
+                      </span>
+                      <p className="mt-1 text-sm">
+                        {selectedBooking.specialRequests}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-2">
+                  {selectedBooking.status === 'confirmed' && (
+                    <Button
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      onClick={() =>
+                        handleStatusUpdate(selectedBooking.id, 'checked_in')
+                      }
+                    >
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Check In Guest
+                    </Button>
+                  )}
+                  {selectedBooking.status === 'checked_in' && (
+                    <Button
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() =>
+                        handleStatusUpdate(selectedBooking.id, 'checked_out')
+                      }
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Check Out Guest
+                    </Button>
+                  )}
+                  {(selectedBooking.status === 'confirmed' ||
+                    selectedBooking.status === 'pending') && (
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() =>
+                        handleStatusUpdate(selectedBooking.id, 'cancelled')
+                      }
+                    >
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Cancel Booking
+                    </Button>
+                  )}
+                  {selectedBooking.status === 'pending' && (
+                    <Button
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() =>
+                        handleStatusUpdate(selectedBooking.id, 'confirmed')
+                      }
+                    >
+                      Confirm Booking
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </motion.div>

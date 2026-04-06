@@ -26,20 +26,23 @@ import {
 import { useAppStore, type ViewType } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
-const navItems: { view: ViewType; label: string; icon: React.ElementType }[] = [
-  { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { view: 'calendar', label: 'Calendar', icon: Calendar },
-  { view: 'bookings', label: 'Bookings', icon: ClipboardList },
-  { view: 'rooms', label: 'Rooms', icon: Bed },
-  { view: 'guests', label: 'Guests', icon: Users },
-  { view: 'channels', label: 'Channels', icon: Radio },
-  { view: 'reports', label: 'Reports', icon: BarChart3 },
-  { view: 'settings', label: 'Settings', icon: Settings },
-]
+const navItems: { view: ViewType; label: string; icon: React.ElementType }[] =
+  [
+    { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { view: 'calendar', label: 'Calendar', icon: Calendar },
+    { view: 'bookings', label: 'Bookings', icon: ClipboardList },
+    { view: 'rooms', label: 'Rooms', icon: Bed },
+    { view: 'guests', label: 'Guests', icon: Users },
+    { view: 'channels', label: 'Channels', icon: Radio },
+    { view: 'reports', label: 'Reports', icon: BarChart3 },
+    { view: 'settings', label: 'Settings', icon: Settings },
+  ]
 
 export function AppSidebar() {
   const {
     currentUser,
+    userRole,
+    hotel,
     currentView,
     sidebarOpen,
     setCurrentView,
@@ -52,6 +55,8 @@ export function AppSidebar() {
     .map((n) => n[0])
     .join('')
     .toUpperCase() || 'U'
+
+  const hotelName = hotel?.name || 'EasyBeds'
 
   return (
     <>
@@ -67,7 +72,7 @@ export function AppSidebar() {
         className={cn(
           'fixed left-0 top-0 z-50 flex h-full flex-col border-r bg-card transition-all duration-300',
           sidebarOpen ? 'w-64' : 'w-0 md:w-16',
-          'md:relative md:z-auto'
+          'md:relative md:z-auto',
         )}
       >
         {/* Brand */}
@@ -81,7 +86,7 @@ export function AppSidebar() {
                 EasyBeds
               </span>
               <span className="truncate text-[11px] text-muted-foreground">
-                Paradise Court Lodge
+                {hotelName}
               </span>
             </div>
           )}
@@ -94,7 +99,7 @@ export function AppSidebar() {
             <ChevronLeft
               className={cn(
                 'h-4 w-4 transition-transform',
-                !sidebarOpen && 'rotate-180'
+                !sidebarOpen && 'rotate-180',
               )}
             />
           </Button>
@@ -133,7 +138,8 @@ export function AppSidebar() {
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={cn(
                     'w-full justify-start gap-3 px-3',
-                    isActive && 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
+                    isActive &&
+                      'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
                   )}
                   onClick={() => setCurrentView(item.view)}
                 >
@@ -160,7 +166,7 @@ export function AppSidebar() {
                   {currentUser?.name}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {currentUser?.role}
+                  {userRole || 'Staff'}
                 </span>
               </div>
               <Button

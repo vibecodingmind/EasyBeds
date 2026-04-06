@@ -15,12 +15,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/lib/store'
-import { mockRooms, mockBookings, mockGuests } from '@/lib/mock-data'
+import { toast } from 'sonner'
 
 export function LoginView() {
-  const { login } = useAppStore()
-  const [email, setEmail] = useState('manager@paradisecourtlodge.com')
-  const [password, setPassword] = useState('password')
+  const { login, register } = useAppStore()
+  const [email, setEmail] = useState('demo@easybeds.com')
+  const [password, setPassword] = useState('demo123')
   const [showPassword, setShowPassword] = useState(false)
   const [showSignup, setShowSignup] = useState(false)
   const [signupData, setSignupData] = useState({
@@ -32,46 +32,59 @@ export function LoginView() {
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      toast.error('Please enter email and password')
+      return
+    }
     setLoading(true)
-    // Simulate API delay
-    await new Promise((r) => setTimeout(r, 800))
-    login(
-      {
-        id: 'user-1',
-        name: 'Sarah Mitchell',
-        email: email,
-        role: 'Hotel Manager',
-      },
-      'hotel-1'
-    )
-    // Store mock data in zustand
-    useAppStore.setState({
-      rooms: mockRooms,
-      bookings: mockBookings,
-      guests: mockGuests,
-    })
-    setLoading(false)
+    try {
+      const success = await login(email, password)
+      if (success) {
+        toast.success('Welcome back!')
+      } else {
+        toast.error('Invalid email or password')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSignup = async () => {
-    if (!signupData.name || !signupData.email || !signupData.password || !signupData.hotelName) return
+    if (
+      !signupData.name ||
+      !signupData.email ||
+      !signupData.password ||
+      !signupData.hotelName
+    ) {
+      toast.error('Please fill in all fields')
+      return
+    }
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
-    login(
-      {
-        id: 'user-new',
+    try {
+      const hotelSlug =
+        signupData.hotelName.toLowerCase().replace(/[^a-z0-9]+/g, '-') +
+        '-' +
+        Date.now().toString(36)
+      const success = await register({
         name: signupData.name,
         email: signupData.email,
-        role: 'Hotel Manager',
-      },
-      'hotel-1'
-    )
-    useAppStore.setState({
-      rooms: mockRooms,
-      bookings: mockBookings,
-      guests: mockGuests,
-    })
-    setLoading(false)
+        password: signupData.password,
+        hotelName: signupData.hotelName,
+        hotelSlug,
+      })
+      if (success) {
+        toast.success('Account created successfully!')
+        setShowSignup(false)
+      } else {
+        toast.error('Registration failed. Please try again.')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -97,7 +110,8 @@ export function LoginView() {
 
         <div className="relative z-10 space-y-6">
           <h2 className="text-3xl font-bold leading-tight text-white">
-            Manage your hotel<br />
+            Manage your hotel
+            <br />
             with confidence.
           </h2>
           <p className="max-w-md text-emerald-100">
@@ -112,7 +126,9 @@ export function LoginView() {
               { label: 'Bookings/Month', value: '120K+' },
             ].map((stat) => (
               <div key={stat.label}>
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
+                <div className="text-2xl font-bold text-white">
+                  {stat.value}
+                </div>
                 <div className="text-xs text-emerald-200">{stat.label}</div>
               </div>
             ))}
@@ -170,6 +186,7 @@ export function LoginView() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 />
                 <Button
                   type="button"
@@ -260,7 +277,10 @@ export function LoginView() {
                     placeholder="Create a password"
                     value={signupData.password}
                     onChange={(e) =>
-                      setSignupData({ ...signupData, password: e.target.value })
+                      setSignupData({
+                        ...signupData,
+                        password: e.target.value,
+                      })
                     }
                   />
                 </div>
@@ -271,13 +291,19 @@ export function LoginView() {
                     placeholder="My Hotel"
                     value={signupData.hotelName}
                     onChange={(e) =>
-                      setSignupData({ ...signupData, hotelName: e.target.value })
+                      setSignupData({
+                        ...signupData,
+                        hotelName: e.target.value,
+                      })
                     }
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowSignup(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSignup(false)}
+                >
                   Cancel
                 </Button>
                 <Button

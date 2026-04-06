@@ -15,7 +15,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useAppStore } from '@/lib/store'
-import { cn } from '@/lib/utils'
 
 const viewTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -29,14 +28,22 @@ const viewTitles: Record<string, string> = {
 }
 
 export function AppHeader() {
-  const { currentView, toggleSidebar, setShowNewBookingDialog, currentUser } =
-    useAppStore()
+  const {
+    currentView,
+    toggleSidebar,
+    setShowNewBookingDialog,
+    logout,
+    currentUser,
+    hotel,
+  } = useAppStore()
 
   const initials = currentUser?.name
     ?.split(' ')
     .map((n) => n[0])
     .join('')
     .toUpperCase() || 'U'
+
+  const hotelName = hotel?.name || 'EasyBeds'
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6">
@@ -56,17 +63,14 @@ export function AppHeader() {
           {viewTitles[currentView] || 'Dashboard'}
         </h1>
         <p className="hidden text-xs text-muted-foreground sm:block">
-          Paradise Court Lodge
+          {hotelName}
         </p>
       </div>
 
       {/* Search */}
       <div className="relative hidden md:block">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search bookings, guests..."
-          className="w-64 pl-9"
-        />
+        <Input placeholder="Search bookings, guests..." className="w-64 pl-9" />
       </div>
 
       {/* Notifications */}
@@ -85,19 +89,19 @@ export function AppHeader() {
           <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
             <span className="text-sm font-medium">New booking received</span>
             <span className="text-xs text-muted-foreground">
-              Sophie Müller - Check-in today
+              Check-in today
             </span>
             <span className="text-xs text-muted-foreground">2 hours ago</span>
           </DropdownMenuItem>
           <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
             <span className="text-sm font-medium">Check-out reminder</span>
             <span className="text-xs text-muted-foreground">
-              Emma Williams - Room 202 checking out today
+              Room checking out today
             </span>
             <span className="text-xs text-muted-foreground">5 hours ago</span>
           </DropdownMenuItem>
           <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-            <span className="text-sm font-medium">Room 302 maintenance</span>
+            <span className="text-sm font-medium">Room maintenance</span>
             <span className="text-xs text-muted-foreground">
               Maintenance completed, room is available
             </span>
@@ -138,7 +142,9 @@ export function AppHeader() {
           <DropdownMenuItem>Profile</DropdownMenuItem>
           <DropdownMenuItem>Settings</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive">Log out</DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive" onClick={logout}>
+            Log out
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
