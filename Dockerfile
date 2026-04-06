@@ -24,9 +24,6 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install prisma CLI for migrations
-RUN npm install -g prisma
-
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -46,6 +43,5 @@ USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-CMD sh -c "npx prisma migrate deploy; node server.js"
+CMD ["node", "server.js"]
