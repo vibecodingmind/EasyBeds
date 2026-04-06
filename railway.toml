@@ -8,7 +8,6 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/api"
 healthcheckTimeout = 300
-restartPolicyType = "on_failure"
 
 [[services]]
 name = "easybeds"
