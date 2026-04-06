@@ -387,18 +387,36 @@ export interface RegisterInput {
 class ApiClient {
   private baseUrl = '/api'
 
+  private getToken(): string | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = localStorage.getItem('easybeds-token')
+      if (stored) return stored
+      // Fallback: try to read from zustand persisted state
+      const state = JSON.parse(localStorage.getItem('easybeds-store') || '{}')
+      return state?.state?.token || null
+    } catch {
+      return null
+    }
+  }
+
   private async request<T>(
     path: string,
     options?: RequestInit,
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${path}`
+      const token = this.getToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options?.headers as Record<string, string>),
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
       const res = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
         ...options,
+        headers,
       })
 
       const json = await res.json()

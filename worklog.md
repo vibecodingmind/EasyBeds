@@ -433,3 +433,44 @@ Stage Summary:
 - Deployment: Dockerfile, railway.toml, .env.example, README.md, .gitignore
 - 4 view bugs fixed across housekeeping, bookings, sidebar, store
 
+---
+Task ID: 26
+Agent: Landing Page Route Group Agent
+Task: Build a production-quality public landing page in the (landing) route group
+
+### Work Task
+Create a new `(landing)` route group with its own layout and a beautiful SaaS marketing landing page, completely independent from the app's auth/store system.
+
+### Work Summary
+
+## Files Created:
+1. **`src/app/(landing)/layout.tsx`** — Minimal layout that passes through children without sidebar or auth
+2. **`src/app/(landing)/page.tsx`** — Complete landing page with all sections
+3. **`public/dashboard-mockup.png`** — AI-generated dashboard mockup image (1344x768)
+
+## Landing Page Sections Built:
+1. **Navbar** — Fixed, transparent-to-white on scroll, smooth scroll behavior, mobile hamburger menu, "Log In" and "Start Free Trial" buttons linking to `/`
+2. **Hero** — White background with decorative gradient blobs, headline "The Smartest Way to Manage Your Hotel", gradient text accent, CTA buttons (Get Started Free, Book a Demo), browser chrome dashboard mockup with next/image, floating stat cards (+28.5% revenue, 92.4% occupancy), stats row (2,400+ hotels, 48K+ rooms, 120K+ bookings, 99.9% uptime)
+3. **Trusted By** — Channel partner names (Booking.com, Airbnb, Expedia, Agoda, Hotels.com, TripAdvisor)
+4. **Features** — 6 feature cards in 3-column grid: Booking Management, Channel Manager, Housekeeping, Dynamic Pricing, Guest Portal, Reports & Analytics. Each with unique color scheme and hover animations.
+5. **How It Works** — 3-step flow with connected gradient circles: Sign Up → Connect Channels → Manage Everything. Gradient step connectors.
+6. **Pricing** — 3-tier cards matching settings-view.tsx: Free ($0 forever), Starter ($49/mo), Professional ($99/mo). Pro highlighted with emerald ring and "Most Popular" badge.
+7. **Testimonials** — 3 hotel manager testimonials with star ratings (Grace Mwangi, Joseph Kayombo, Amina Hassan)
+8. **CTA** — "Ready to grow your hotel?" section with emerald gradient, decorative SVG pattern, two CTA buttons
+9. **Footer** — 5-column layout: Brand (with email, phone, address), Product, Company, Legal links, bottom bar with copyright and legal links
+
+## Design Choices:
+- Emerald green primary color matching app's existing pattern
+- Clean white/gray alternating section backgrounds
+- Feature cards with unique color-coded icons (blue, purple, amber, emerald, rose, cyan)
+- Hover effects with lift animations and shadow transitions
+- Fully responsive with mobile-first approach
+- All CTA buttons link to `/` (login/register page)
+- Uses only shadcn/ui components (Button, Card, Badge) and Lucide icons
+- No dependency on useAppStore — completely independent
+
+## Quality:
+- Zero ESLint errors on new files
+- Dev server compiling cleanly
+- All sections render correctly
+

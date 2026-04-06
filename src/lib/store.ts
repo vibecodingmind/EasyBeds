@@ -209,6 +209,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const { token, user, hotel, role } = response.data
 
+    // Persist token to localStorage for API client
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('easybeds-token', token)
+    }
+
     set({
       isAuthenticated: true,
       currentHotelId: hotel.id,
@@ -245,6 +250,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const { token, user, hotel } = response.data
 
+    // Persist token to localStorage for API client
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('easybeds-token', token)
+    }
+
     set({
       isAuthenticated: true,
       currentHotelId: hotel.id,
@@ -272,7 +282,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return true
   },
 
-  logout: () =>
+  logout: () => {
+    // Clear persisted token
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('easybeds-token')
+    }
     set({
       isAuthenticated: false,
       currentHotelId: null,
@@ -292,7 +306,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       showNewRoomDialog: false,
       selectedBookingId: null,
       selectedGuestId: null,
-    }),
+    })
+  },
 
   // ── Async Data Fetching ──────────────────────────────────────────────────
 

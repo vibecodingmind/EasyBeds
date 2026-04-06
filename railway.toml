@@ -1,11 +1,14 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install -g bun && bun install && bun run build"
+buildCommand = "npm install -g bun && bun install && npx prisma generate && bun run build"
 
 [deploy]
-startCommand = "bun .next/standalone/server.js"
+startCommand = "npx prisma migrate deploy && bun .next/standalone/server.js"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+healthcheckPath = "/api"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
 
 [[services]]
 name = "easybeds"
