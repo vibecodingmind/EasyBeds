@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "npm install -g bun && bun install && ./node_modules/.bin/prisma generate && bun run build"
 
 [deploy]
-startCommand = "node .next/standalone/server.js"
+
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/api"
