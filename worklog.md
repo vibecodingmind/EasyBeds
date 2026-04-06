@@ -474,3 +474,30 @@ Create a new `(landing)` route group with its own layout and a beautiful SaaS ma
 - Dev server compiling cleanly
 - All sections render correctly
 
+---
+Task ID: 27
+Agent: Deployment Orchestrator
+Task: Push to GitHub, fix settings/auth, Railway deployment preparation
+
+Work Log:
+- Found project at /home/z/my-project/ (not /home/user/easybeds)
+- Authenticated to GitHub as vibecodingmind
+- Created/found EasyBeds repo at https://github.com/vibecodingmind/EasyBeds
+- Switched Prisma provider from SQLite to PostgreSQL for Railway
+- Updated .env.example with complete env vars (DATABASE_URL, JWT_SECRET, RESEND_API_KEY, STRIPE keys, WhatsApp)
+- Updated Dockerfile with multi-stage build, prisma generate, prisma migrate deploy
+- Updated railway.toml with prisma generate + migrate deploy in build/start
+- Fixed API client (api.ts) to include JWT Bearer token in all requests from localStorage
+- Fixed store.ts to persist JWT token to localStorage on login/register
+- Fixed store.ts logout to clear persisted token
+- Fixed logout function syntax error (missing closing brace)
+- Verified build: zero errors, 76+ API routes, all pages compiling
+- Removed duplicate (landing) route group (landing page already in main page.tsx)
+- Committed and pushed to GitHub
+
+Stage Summary:
+- GitHub repo: https://github.com/vibecodingmind/EasyBeds (2 commits pushed)
+- Railway-ready: PostgreSQL, Dockerfile, railway.toml, .env.example all configured
+- Auth fix: JWT token properly persisted and sent with API requests
+- Build: Clean, zero errors, production-ready
+
