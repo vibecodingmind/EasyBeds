@@ -1,0 +1,2 @@
+[variables]
+PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
