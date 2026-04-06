@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { hashPassword, signJwt } from '@/lib/auth';
+
+// POST /api/auth/register — Hotel owner signup
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { name, email, password, hotelName, hotelSlug, phone, country, city, address } = body;
+
+    if (!name || !email || !password || !hotelName || !hotelSlug) {
+      return NextResponse.json(
+        { success: false, error: 'Name, email, password, hotelName, and hotelSlug are required.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user email already exists
+    const existingUser = await db.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return NextResponse.json(
+        { success: false, error: 'A user with this email already exists.' },
+        { status: 409 }
+      );
+    }
+
+    // Check if hotel slug already exists
+    const existingHotel = await db.hotel.findUnique({ where: { slug: hotelSlug } });
+    if (existingHotel) {
+      return NextResponse.json(
+        { success: false, error: 'This hotel slug is already taken.' },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = hashPassword(password);
+
+    // Create User, Hotel, and HotelUser in a transaction
+    const result = await db.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          emailVerified: true,
+        },
+      });
+
+      const hotel = await tx.hotel.create({
+        data: {
+          name: hotelName,
+          slug: hotelSlug,
+          phone: phone || null,
+          email: email,
+          country: country || 'Tanzania',
+          city: city || null,
+          address: address || null,
+          plan: 'free',
+        },
+      });
+
+      const hotelUser = await tx.hotelUser.create({
+        data: {
+          hotelId: hotel.id,
+          userId: user.id,
+          role: 'owner',
+        },
+      });
+
+      return { user, hotel, hotelUser };
+    });
+
+    const token = signJwt({
+      userId: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      hotelId: result.hotel.id,
+      role: 'owner',
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          token,
+          user: {
+            id: result.user.id,
+            name: result.user.name,
+            email: result.user.email,
+          },
+          hotel: {
+            id: result.hotel.id,
+            name: result.hotel.name,
+            slug: result.hotel.slug,
+          },
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Registration failed.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}

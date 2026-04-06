@@ -1,0 +1,381 @@
+// EasyBeds — Hotel Booking & Channel Management SaaS
+// Complete Multi-Tenant Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// TENANT & USER MANAGEMENT
+// ============================================
+
+model Hotel {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique // for subdomain routing e.g. paradisecourt.easybeds.com
+  description   String?
+  address       String?
+  city          String?
+  country       String   @default("Tanzania")
+  phone         String?
+  email         String?
+  website       String?
+  logoUrl       String?
+  timezone      String   @default("Africa/Dar_es_Salaam")
+  checkInTime   String   @default("14:00")
+  checkOutTime  String   @default("10:00")
+  currency      String   @default("TZS")
+  plan          String   @default("free") // free, starter, pro
+  isActive      Boolean  @default(true)
+  trialEndsAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  rooms       Room[]
+  bookings    Booking[]
+  guests      Guest[]
+  channels    Channel[]
+  users       HotelUser[]
+  ratePlans      RatePlan[]
+  payments        Payment[]
+  availabilityBlocks AvailabilityBlock[]
+  syncLogs        SyncLog[]
+
+  @@index([slug])
+  @@index([plan])
+}
+
+model HotelUser {
+  id            String   @id @default(cuid())
+  hotelId       String
+  userId        String
+  role          String   @default("staff") // owner, manager, staff
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  hotel    Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([hotelId, userId])
+  @@index([hotelId])
+  @@index([userId])
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  avatarUrl     String?
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotels        HotelUser[]
+}
+
+// ============================================
+// ROOM MANAGEMENT
+// ============================================
+
+enum RoomType {
+  single
+  double
+  twin
+  suite
+  dormitory
+  family
+}
+
+model Room {
+  id              String    @id @default(cuid())
+  hotelId         String
+  name            String    // e.g. "Room 101", "Garden Suite"
+  roomNumber      String    // physical room number for display
+  type            RoomType  @default(double)
+  maxGuests       Int       @default(2)
+  basePrice       Float     // base price per night
+  description     String?
+  amenities       String?   // JSON string: ["wifi", "ac", "tv", "minibar"]
+  floor           Int?
+  bedType         String?   // e.g. "king", "queen", "twin", "single"
+  imageUrl        String?
+  sortOrder       Int       @default(0)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  hotel           Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+  availabilityBlocks AvailabilityBlock[]
+  ratePlans       RatePlan[]
+
+  @@index([hotelId])
+  @@index([isActive])
+}
+
+// ============================================
+// GUEST MANAGEMENT
+// ============================================
+
+model Guest {
+  id            String   @id @default(cuid())
+  hotelId       String
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  idNumber      String?  // passport or national ID
+  idType        String?  // passport, national_id, drivers_license
+  nationality   String?
+  address       String?
+  city          String?
+  country       String?
+  notes         String?
+  vip           Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel         Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+
+  @@index([hotelId])
+  @@index([email])
+  @@index([phone])
+  @@index([firstName, lastName])
+}
+
+// ============================================
+// CHANNEL / OTA MANAGEMENT
+// ============================================
+
+enum ChannelType {
+  ota
+  direct
+  walkin
+  website
+  phone
+  email
+  agent
+}
+
+enum SyncMethod {
+  manual
+  ical
+  api
+}
+
+model Channel {
+  id            String     @id @default(cuid())
+  hotelId       String
+  name          String     // e.g. "Booking.com", "Airbnb", "Walk-in"
+  type          ChannelType @default(walkin)
+  syncMethod    SyncMethod @default(manual)
+  icalUrl       String?    // OTA's iCal URL (for importing)
+  icalExportSlug String?   // unique slug for exporting this channel's iCal
+  apiKey        String?
+  commission    Float?     // commission rate (e.g. 0.15 for 15%)
+  isActive      Boolean    @default(true)
+  lastSyncAt    DateTime?
+  syncStatus    String?    // success, error, partial
+  syncError     String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  hotel         Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  syncLogs      SyncLog[]
+  ratePlans     RatePlan[]
+  bookings      Booking[]
+
+  @@index([hotelId])
+  @@index([isActive])
+}
+
+// ============================================
+// BOOKING ENGINE
+// ============================================
+
+enum BookingStatus {
+  pending
+  confirmed
+  checked_in
+  checked_out
+  cancelled
+  no_show
+}
+
+model Booking {
+  id                  String        @id @default(cuid())
+  hotelId             String
+  roomId              String
+  guestId             String
+  channelId           String
+  channelBookingRef   String?       // OTA's own reference number
+  confirmationCode    String        @unique // e.g. "EB-20260406-001"
+  checkInDate         DateTime      // stored as date-only, timezone-agnostic
+  checkOutDate        DateTime
+  numGuests           Int           @default(1)
+  numNights           Int
+  pricePerNight       Float
+  totalPrice          Float
+  currency            String
+  status              BookingStatus @default(pending)
+  specialRequests     String?
+  internalNotes       String?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  checkedInAt         DateTime?
+  checkedOutAt        DateTime?
+  sourceIp            String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  hotel               Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room                Room          @relation(fields: [roomId], references: [id])
+  guest               Guest         @relation(fields: [guestId], references: [id])
+  channel             Channel       @relation(fields: [channelId], references: [id])
+  availabilityBlock   AvailabilityBlock?
+  payments            Payment[]
+
+  @@index([hotelId])
+  @@index([roomId])
+  @@index([guestId])
+  @@index([channelId])
+  @@index([status])
+  @@index([checkInDate, checkOutDate])
+  @@index([confirmationCode])
+}
+
+// ============================================
+// AVAILABILITY / DOUBLE-BOOKING PREVENTION
+// ============================================
+
+enum BlockType {
+  booking
+  maintenance
+  owner_use
+  hold
+}
+
+model AvailabilityBlock {
+  id          String    @id @default(cuid())
+  hotelId     String
+  roomId      String
+  bookingId   String?   @unique // null for manual blocks (maintenance, owner_use)
+  startDate   DateTime  // date-only
+  endDate     DateTime  // date-only
+  blockType   BlockType @default(booking)
+  reason      String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  hotel       Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  booking     Booking?  @relation(fields: [bookingId], references: [id])
+
+  @@index([hotelId, roomId])
+  @@index([hotelId, startDate, endDate])
+  @@index([bookingId])
+}
+
+// ============================================
+// RATE PLANS
+// ============================================
+
+model RatePlan {
+  id            String   @id @default(cuid())
+  hotelId       String
+  roomId        String
+  channelId     String?  // null = default rate, specific = channel-specific rate
+  name          String?  // e.g. "High Season", "Weekend Rate"
+  pricePerNight Float
+  validFrom     DateTime?
+  validTo       DateTime?
+  minStay       Int?     // minimum nights
+  maxStay       Int?     // maximum nights
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel         Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  channel       Channel? @relation(fields: [channelId], references: [id])
+
+  @@unique([roomId, channelId])
+
+  @@index([hotelId, roomId])
+  @@index([validFrom, validTo])
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+  partially_refunded
+}
+
+enum PaymentMethod {
+  cash
+  card
+  bank_transfer
+  mobile_money
+  online
+  waiver
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  hotelId       String
+  bookingId     String
+  amount        Float
+  currency      String
+  method        PaymentMethod @default(cash)
+  status        PaymentStatus @default(pending)
+  transactionRef String?      // external payment reference
+  notes         String?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  hotel         Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId])
+  @@index([bookingId])
+  @@index([status])
+}
+
+// ============================================
+// ICAL SYNC LOG
+// ============================================
+
+model SyncLog {
+  id            String   @id @default(cuid())
+  hotelId       String
+  channelId     String
+  direction     String   // import, export
+  status        String   // success, error, partial
+  eventsFound   Int      @default(0)
+  eventsCreated Int      @default(0)
+  eventsUpdated Int      @default(0)
+  eventsDeleted Int      @default(0)
+  errorMessage  String?
+  syncedAt      DateTime @default(now())
+
+  hotel         Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  channel       Channel  @relation(fields: [channelId], references: [id])
+
+  @@index([hotelId])
+  @@index([channelId])
+  @@index([syncedAt])
+}
