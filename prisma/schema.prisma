@@ -99,7 +99,11 @@ model User {
   passwordHash  String
   name          String
   avatarUrl     String?
-  emailVerified Boolean  @default(false)
+  emailVerified            Boolean  @default(false)
+  resetToken               String?
+  resetTokenExpiry         DateTime?
+  verificationToken        String?
+  verificationTokenExpiry  DateTime?
   role          String   @default("user") // admin, user — platform-level role
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

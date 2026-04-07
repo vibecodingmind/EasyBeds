@@ -21,7 +21,10 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
 import { api, type OccupancyReportData, type RevenueReportData } from '@/lib/api'
+import { formatCurrency } from '@/lib/currency'
+import { downloadPrintableHtml } from '@/lib/pdf-utils'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import {
   BarChart,
   Bar,
@@ -129,14 +132,7 @@ export function ReportsView() {
     fetchReports(fromDate, toDate)
   }
 
-  const formatCurrency = (amount: number) => {
-    const currency = hotel?.currency || 'USD'
-    try {
-      return amount.toLocaleString(undefined, { style: 'currency', currency })
-    } catch {
-      return `${currency} ${amount.toLocaleString()}`
-    }
-  }
+  const currency = hotel?.currency || 'USD'
 
   // ─── Metrics Cards ────────────────────────────────────────────────────────
 
@@ -145,7 +141,7 @@ export function ReportsView() {
     return [
       {
         title: 'Total Revenue',
-        value: formatCurrency(revenueData.summary.totalRevenue),
+        value: formatCurrency(revenueData.summary.totalRevenue, currency),
         icon: DollarSign,
         color: 'text-emerald-600',
         bg: 'bg-emerald-50',
@@ -159,7 +155,7 @@ export function ReportsView() {
       },
       {
         title: 'Avg. Daily Rate',
-        value: formatCurrency(Math.round(occupancyData.summary.avgDailyRate)),
+        value: formatCurrency(Math.round(occupancyData.summary.avgDailyRate), currency),
         icon: TrendingUp,
         color: 'text-purple-600',
         bg: 'bg-purple-50',
@@ -271,11 +267,11 @@ export function ReportsView() {
             setReportLoading('daily')
             try {
               const res = await fetch(`/api/reports/daily?hotelId=${currentHotelId}&date=${format(new Date(), 'yyyy-MM-dd')}&format=pdf`)
+              if (!res.ok) { toast.error('Failed to generate daily report'); return }
               const html = await res.text()
-              const win = window.open('', '_blank')
-              if (win) { win.document.write(html); win.document.close(); }
-            } catch { /* ignore */ }
-            setReportLoading(null)
+              downloadPrintableHtml(html, `daily-report-${format(new Date(), 'yyyy-MM-dd')}.html`)
+            } catch { toast.error('Failed to generate daily report') }
+            finally { setReportLoading(null) }
           }}
         >
           <FileText className="mr-1.5 h-3.5 w-3.5" />
@@ -290,11 +286,11 @@ export function ReportsView() {
             setReportLoading('monthly')
             try {
               const res = await fetch(`/api/reports/monthly?hotelId=${currentHotelId}&month=${format(new Date(), 'yyyy-MM')}&format=pdf`)
+              if (!res.ok) { toast.error('Failed to generate monthly report'); return }
               const html = await res.text()
-              const win = window.open('', '_blank')
-              if (win) { win.document.write(html); win.document.close(); }
-            } catch { /* ignore */ }
-            setReportLoading(null)
+              downloadPrintableHtml(html, `monthly-report-${format(new Date(), 'yyyy-MM')}.html`)
+            } catch { toast.error('Failed to generate monthly report') }
+            finally { setReportLoading(null) }
           }}
         >
           <FileText className="mr-1.5 h-3.5 w-3.5" />
@@ -309,11 +305,11 @@ export function ReportsView() {
             setReportLoading('financial')
             try {
               const res = await fetch(`/api/reports/financial?hotelId=${currentHotelId}&from=${fromDate}&to=${toDate}&format=pdf`)
+              if (!res.ok) { toast.error('Failed to generate financial report'); return }
               const html = await res.text()
-              const win = window.open('', '_blank')
-              if (win) { win.document.write(html); win.document.close(); }
-            } catch { /* ignore */ }
-            setReportLoading(null)
+              downloadPrintableHtml(html, `financial-report-${fromDate}-to-${toDate}.html`)
+            } catch { toast.error('Failed to generate financial report') }
+            finally { setReportLoading(null) }
           }}
         >
           <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -442,7 +438,7 @@ export function ReportsView() {
                         className="text-muted-foreground"
                       />
                       <RechartsTooltip
-                        formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                        formatter={(value: number) => [formatCurrency(value, currency), 'Revenue']}
                       />
                       <Bar dataKey="revenue" fill="#10B981" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -488,7 +484,7 @@ export function ReportsView() {
                         className="text-muted-foreground"
                       />
                       <RechartsTooltip
-                        formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                        formatter={(value: number) => [formatCurrency(value, currency), 'Revenue']}
                         labelFormatter={(label) => `Date: ${label}`}
                       />
                       <Line
@@ -544,7 +540,7 @@ export function ReportsView() {
                         width={80}
                       />
                       <RechartsTooltip
-                        formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                        formatter={(value: number) => [formatCurrency(value, currency), 'Revenue']}
                       />
                       <Bar dataKey="revenue" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
                     </BarChart>
@@ -583,7 +579,7 @@ export function ReportsView() {
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
                     <p className="text-2xl font-bold">
-                      {formatCurrency(Math.round(occupancyData.summary.avgDailyRate))}
+                      {formatCurrency(Math.round(occupancyData.summary.avgDailyRate), currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">Avg Daily Rate</p>
                   </div>

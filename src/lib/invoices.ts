@@ -158,9 +158,22 @@ export async function getInvoices(hotelId: string) {
   });
 }
 
+// =============================================================================
+// HTML Invoice Generation — A4 Print-Optimized
+// =============================================================================
+
+/** Minimal HTML entity escape for safety in generated markup */
+function esc(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
- * Generate a text-based PDF invoice as a downloadable HTML response.
- * Returns the HTML string that can be served as PDF content.
+ * Generate a complete, print-optimized HTML invoice document.
+ * Returns a self-contained HTML string with A4 layout, inline CSS, and auto-print.
  */
 export function generateInvoiceHtml(invoice: Awaited<ReturnType<typeof getInvoice>>): string {
   const hotel = invoice.hotel;
@@ -170,133 +183,390 @@ export function generateInvoiceHtml(invoice: Awaited<ReturnType<typeof getInvoic
   const checkIn = format(new Date(booking.checkInDate), 'MMM dd, yyyy');
   const checkOut = format(new Date(booking.checkOutDate), 'MMM dd, yyyy');
   const issuedDate = format(new Date(invoice.createdAt), 'MMM dd, yyyy');
-  const dueDate = invoice.dueDate ? format(new Date(invoice.dueDate), 'MMM dd, yyyy') : 'Due at check-in';
+  const dueDate = invoice.dueDate
+    ? format(new Date(invoice.dueDate), 'MMM dd, yyyy')
+    : 'Due at check-in';
+
+  const generatedAt = new Date().toLocaleString();
+
+  const hotelContact = [
+    hotel.address && `${esc(hotel.address)}`,
+    hotel.city && `${esc(hotel.city)}${hotel.country ? `, ${esc(hotel.country)}` : ''}`,
+    hotel.phone && `Phone: ${esc(hotel.phone)}`,
+    hotel.email && `Email: ${esc(hotel.email)}`,
+    hotel.website && `Web: ${esc(hotel.website)}`,
+  ]
+    .filter(Boolean)
+    .join('<br>');
+
+  const guestContact = [
+    guest.email && `${esc(guest.email)}`,
+    guest.phone && `Phone: ${esc(guest.phone)}`,
+    guest.address && `${esc(guest.address)}${guest.city ? `, ${esc(guest.city)}` : ''}${guest.country ? `, ${esc(guest.country)}` : ''}`,
+  ]
+    .filter(Boolean)
+    .join('<br>');
+
+  const fmtCurrency = (amount: number) => {
+    try {
+      return amount.toLocaleString(undefined, {
+        style: 'currency',
+        currency: invoice.currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      return `${invoice.currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+  };
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice ${invoice.invoiceNumber}</title>
+  <title>Invoice ${esc(invoice.invoiceNumber)}</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f4f5; color: #18181b; }
-    .container { max-width: 800px; margin: 40px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #059669, #10b981); padding: 32px 40px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 28px; font-weight: 700; }
-    .header .invoice-meta { text-align: right; }
-    .header .invoice-meta .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.9; }
-    .header .invoice-meta .value { font-size: 18px; font-weight: 600; }
-    .body { padding: 32px 40px; }
-    .parties { display: flex; justify-content: space-between; margin-bottom: 32px; gap: 24px; }
+    /* ── Reset ────────────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── Page ─────────────────────────────────────────────────────── */
+    @page { size: A4; margin: 15mm 12mm; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #18181b;
+      background: #ffffff;
+    }
+
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 0 0 20px;
+      border-bottom: 3px solid #10b981;
+      margin-bottom: 28px;
+    }
+    .hotel-brand h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #18181b;
+    }
+    .hotel-brand .contact {
+      font-size: 12px;
+      color: #52525b;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    .invoice-badge {
+      text-align: right;
+    }
+    .invoice-badge .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #71717a;
+    }
+    .invoice-badge .number {
+      font-size: 22px;
+      font-weight: 700;
+      color: #10b981;
+    }
+    .invoice-badge .status {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    /* ── Parties (From / Bill To) ─────────────────────────────────── */
+    .parties {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      gap: 24px;
+    }
     .party { flex: 1; }
-    .party h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin-bottom: 8px; }
-    .party .name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-    .party .detail { font-size: 13px; color: #52525b; line-height: 1.5; }
-    .dates { display: flex; gap: 24px; margin-bottom: 32px; background: #f9fafb; padding: 16px 20px; border-radius: 8px; }
-    .date-item { flex: 1; }
-    .date-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; }
-    .date-item .value { font-size: 14px; font-weight: 500; margin-top: 2px; }
-    table.items { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-    table.items th { text-align: left; padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; border-bottom: 2px solid #e4e4e7; }
-    table.items td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #f4f4f5; }
-    table.items td.amount { text-align: right; font-weight: 600; }
-    table.items td.right { text-align: right; }
-    .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
-    .totals-table { width: 280px; }
-    .totals-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
-    .totals-row.total { border-top: 2px solid #18181b; padding-top: 12px; font-size: 18px; font-weight: 700; color: #059669; }
-    .footer { padding: 20px 40px; border-top: 1px solid #e4e4e7; text-align: center; font-size: 12px; color: #a1a1aa; }
+    .party.right { text-align: right; }
+    .party h3 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #71717a;
+      margin-bottom: 8px;
+    }
+    .party .name {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .party .detail {
+      font-size: 12px;
+      color: #52525b;
+      line-height: 1.6;
+    }
+
+    /* ── Date / Reference Bar ─────────────────────────────────────── */
+    .info-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      background: #f9fafb;
+      border: 1px solid #e4e4e7;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-item {
+      flex: 1;
+      padding: 12px 16px;
+      border-right: 1px solid #e4e4e7;
+    }
+    .info-item:last-child { border-right: none; }
+    .info-item .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #71717a;
+    }
+    .info-item .value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #18181b;
+      margin-top: 2px;
+    }
+
+    /* ── Line Items Table ─────────────────────────────────────────── */
+    table.items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+    table.items thead th {
+      background: #f4f4f5;
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #52525b;
+      border-bottom: 2px solid #d4d4d8;
+    }
+    table.items tbody td {
+      padding: 12px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid #f4f4f5;
+      color: #27272a;
+    }
+    table.items tbody tr:last-child td { border-bottom: none; }
+    .text-right { text-align: right; }
+    .amount { font-weight: 600; }
+
+    /* ── Totals ───────────────────────────────────────────────────── */
+    .totals-section {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .totals-table {
+      width: 300px;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 14px;
+      color: #3f3f46;
+    }
+    .totals-row.total {
+      border-top: 2px solid #18181b;
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+    .totals-row.total .label { font-weight: 600; color: #18181b; }
+    .totals-row.total .value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #10b981;
+    }
+
+    /* ── Notes ────────────────────────────────────────────────────── */
+    .notes {
+      background: #fafaf9;
+      border: 1px solid #e7e5e4;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-bottom: 28px;
+    }
+    .notes h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #71717a;
+      margin-bottom: 4px;
+    }
+    .notes p {
+      font-size: 13px;
+      color: #52525b;
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    .doc-footer {
+      padding-top: 16px;
+      border-top: 1px solid #e4e4e7;
+      text-align: center;
+      font-size: 11px;
+      color: #a1a1aa;
+      line-height: 1.6;
+    }
+
+    /* ── Print ────────────────────────────────────────────────────── */
     @media print {
-      body { background: #fff; }
-      .container { box-shadow: none; margin: 0; }
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .page { max-width: none; }
+      .invoice-header { page-break-after: avoid; }
+      table.items { page-break-inside: avoid; }
+      .totals-section { page-break-inside: avoid; }
+    }
+
+    /* ── Screen Responsive ────────────────────────────────────────── */
+    @media screen and (max-width: 640px) {
+      .parties { flex-direction: column; gap: 16px; }
+      .party.right { text-align: left; }
+      .info-bar { flex-direction: column; }
+      .info-item { border-right: none; border-bottom: 1px solid #e4e4e7; }
+      .info-item:last-child { border-bottom: none; }
+      body { padding: 0 8px; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>${hotel.name}</h1>
-      <div class="invoice-meta">
+  <div class="page">
+
+    <!-- Header -->
+    <div class="invoice-header">
+      <div class="hotel-brand">
+        <h1>${esc(hotel.name)}</h1>
+        <div class="contact">${hotelContact}</div>
+      </div>
+      <div class="invoice-badge">
         <div class="label">Invoice</div>
-        <div class="value">${invoice.invoiceNumber}</div>
+        <div class="number">${esc(invoice.invoiceNumber)}</div>
+        <div class="status">${esc(invoice.status)}</div>
       </div>
     </div>
-    <div class="body">
-      <div class="parties">
-        <div class="party">
-          <h3>From</h3>
-          <div class="name">${hotel.name}</div>
-          <div class="detail">
-            ${hotel.address || ''}${hotel.city ? `, ${hotel.city}` : ''}${hotel.country ? `, ${hotel.country}` : ''}<br>
-            ${hotel.phone ? `Phone: ${hotel.phone}<br>` : ''}
-            ${hotel.email ? `Email: ${hotel.email}<br>` : ''}
-            ${hotel.website ? `Web: ${hotel.website}` : ''}
-          </div>
-        </div>
-        <div class="party" style="text-align:right;">
-          <h3>Bill To</h3>
-          <div class="name">${guest.firstName} ${guest.lastName}</div>
-          <div class="detail">
-            ${guest.email ? `${guest.email}<br>` : ''}
-            ${guest.phone ? `Phone: ${guest.phone}<br>` : ''}
-            ${guest.address ? `${guest.address}` : ''}${guest.city ? `, ${guest.city}` : ''}${guest.country ? `, ${guest.country}` : ''}
-          </div>
-        </div>
+
+    <!-- From / Bill To -->
+    <div class="parties">
+      <div class="party">
+        <h3>From</h3>
+        <div class="name">${esc(hotel.name)}</div>
+        <div class="detail">${hotelContact}</div>
       </div>
-      <div class="dates">
-        <div class="date-item">
-          <div class="label">Issued</div>
-          <div class="value">${issuedDate}</div>
-        </div>
-        <div class="date-item">
-          <div class="label">Due Date</div>
-          <div class="value">${dueDate}</div>
-        </div>
-        <div class="date-item">
-          <div class="label">Booking Ref</div>
-          <div class="value">${booking.confirmationCode}</div>
-        </div>
+      <div class="party right">
+        <h3>Bill To</h3>
+        <div class="name">${esc(guest.firstName)} ${esc(guest.lastName)}</div>
+        <div class="detail">${guestContact || '—'}</div>
       </div>
-      <table class="items">
-        <thead>
-          <tr>
-            <th>Description</th>
-            <th class="right">Unit Price</th>
-            <th class="right">Nights</th>
-            <th class="amount">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>${booking.room.name} (${booking.room.type}) — ${checkIn} to ${checkOut}</td>
-            <td class="right">${invoice.currency} ${booking.pricePerNight.toLocaleString()}</td>
-            <td class="right">${booking.numNights}</td>
-            <td class="amount">${invoice.currency} ${invoice.subtotal.toLocaleString()}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="totals">
-        <div class="totals-table">
-          <div class="totals-row">
-            <span>Subtotal</span>
-            <span>${invoice.currency} ${invoice.subtotal.toLocaleString()}</span>
-          </div>
-          ${invoice.taxRate > 0 ? `<div class="totals-row">
-            <span>Tax (${invoice.taxRate}%)</span>
-            <span>${invoice.currency} ${invoice.taxAmount.toLocaleString()}</span>
-          </div>` : ''}
-          <div class="totals-row total">
-            <span>Total</span>
-            <span>${invoice.currency} ${invoice.totalAmount.toLocaleString()}</span>
-          </div>
+    </div>
+
+    <!-- Info Bar -->
+    <div class="info-bar">
+      <div class="info-item">
+        <div class="label">Issued</div>
+        <div class="value">${esc(issuedDate)}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Due Date</div>
+        <div class="value">${esc(dueDate)}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Booking Ref</div>
+        <div class="value">${esc(booking.confirmationCode)}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Stay</div>
+        <div class="value">${esc(checkIn)} – ${esc(checkOut)}</div>
+      </div>
+    </div>
+
+    <!-- Line Items -->
+    <table class="items">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="text-right">Unit Price</th>
+          <th class="text-right">Nights</th>
+          <th class="text-right amount">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${esc(booking.room.name)} (${esc(booking.room.type)})<br>
+            <span style="font-size:11px;color:#71717a;">${esc(checkIn)} to ${esc(checkOut)}</span>
+          </td>
+          <td class="text-right">${fmtCurrency(booking.pricePerNight)}</td>
+          <td class="text-right">${booking.numNights}</td>
+          <td class="text-right amount">${fmtCurrency(invoice.subtotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals-section">
+      <div class="totals-table">
+        <div class="totals-row">
+          <span class="label">Subtotal</span>
+          <span class="value">${fmtCurrency(invoice.subtotal)}</span>
+        </div>
+        ${invoice.taxRate > 0
+          ? `<div class="totals-row">
+               <span class="label">Tax (${invoice.taxRate}%)</span>
+               <span class="value">${fmtCurrency(invoice.taxAmount)}</span>
+             </div>`
+          : ''}
+        <div class="totals-row total">
+          <span class="label">Total</span>
+          <span class="value">${fmtCurrency(invoice.totalAmount)}</span>
         </div>
       </div>
     </div>
-    <div class="footer">
-      Thank you for your business! — Generated by EasyBeds
+
+    ${invoice.notes
+      ? `<div class="notes">
+           <h4>Notes</h4>
+           <p>${esc(invoice.notes)}</p>
+         </div>`
+      : ''}
+
+    <!-- Footer -->
+    <div class="doc-footer">
+      Thank you for your business!<br>
+      Generated by EasyBeds on ${esc(generatedAt)} &middot; ${esc(hotel.name)}
     </div>
   </div>
+
+  <!-- Auto-print -->
+  <script>
+    window.onload = function() { setTimeout(function() { window.print(); }, 300); };
+  </script>
 </body>
 </html>`;
 }

@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
 import type { ApiBooking } from '@/lib/api'
+import { formatCurrency } from '@/lib/currency'
 import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -141,8 +142,7 @@ export function BookingDetailsDialog() {
 
   if (!selectedBookingId) return null
 
-  const currencySymbol =
-    hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+  const currency = hotel?.currency || 'USD'
 
   if (loading && !booking) {
     return (
@@ -356,15 +356,13 @@ export function BookingDetailsDialog() {
             <div className="mt-2 flex items-baseline justify-between">
               <span className="text-sm text-muted-foreground">Total Amount</span>
               <span className="text-2xl font-bold">
-                {currencySymbol}
-                {booking.totalPrice.toLocaleString()}
+                {formatCurrency(booking.totalPrice, currency)}
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>Rate per night</span>
               <span>
-                {currencySymbol}
-                {booking.pricePerNight.toLocaleString()}
+                {formatCurrency(booking.pricePerNight, currency)}
               </span>
             </div>
           </div>

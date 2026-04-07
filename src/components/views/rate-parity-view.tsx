@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { formatCurrency } from '@/lib/currency'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -64,10 +65,9 @@ export function RateParityView() {
     if (!currentHotelId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/rate-parity?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setData(json.data)
-      else toast.error(json.error || 'Failed to load parity data')
+      const res = await api.getRateParity(currentHotelId)
+      if (res.success) setData(res.data as ParityData)
+      else toast.error(res.error || 'Failed to load parity data')
     } catch (err) {
       console.error('Failed to fetch parity data:', err)
     } finally {

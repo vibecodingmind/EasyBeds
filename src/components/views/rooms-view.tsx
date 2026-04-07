@@ -15,6 +15,9 @@ import {
   UtensilsCrossed,
   ConciergeBell,
   CalendarDays,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,7 +41,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { useAppStore } from '@/lib/store'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useAppStore, type ApiRoom } from '@/lib/store'
 import { parseAmenities, deriveRoomStatus } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -72,8 +85,64 @@ const roomTypeLabels: Record<string, string> = {
   deluxe: 'Deluxe',
 }
 
+const bedTypeOptions = [
+  { value: 'single', label: 'Single Bed' },
+  { value: 'double', label: 'Double Bed' },
+  { value: 'twin', label: 'Twin Beds' },
+  { value: 'queen', label: 'Queen Bed' },
+  { value: 'king', label: 'King Bed' },
+  { value: 'sofa_bed', label: 'Sofa Bed' },
+]
+
+const roomTypeOptions = [
+  { value: 'single', label: 'Single' },
+  { value: 'double', label: 'Double' },
+  { value: 'twin', label: 'Twin' },
+  { value: 'suite', label: 'Suite' },
+  { value: 'family', label: 'Family' },
+  { value: 'dormitory', label: 'Dormitory' },
+]
+
+interface RoomFormData {
+  name: string
+  roomNumber: string
+  type: string
+  basePrice: number
+  maxGuests: number
+  description: string
+  amenities: string
+  floor: number
+  bedType: string
+}
+
+const defaultFormData: RoomFormData = {
+  name: '',
+  roomNumber: '',
+  type: 'double',
+  basePrice: 0,
+  maxGuests: 2,
+  description: '',
+  amenities: '',
+  floor: 1,
+  bedType: 'double',
+}
+
+function roomToFormData(room: ApiRoom): RoomFormData {
+  return {
+    name: room.name,
+    roomNumber: room.roomNumber,
+    type: room.type,
+    basePrice: room.basePrice,
+    maxGuests: room.maxGuests,
+    description: room.description || '',
+    amenities: parseAmenities(room.amenities).join(', '),
+    floor: room.floor || 1,
+    bedType: room.bedType || 'double',
+  }
+}
+
 export function RoomsView() {
-  const { rooms, createRoom, fetchRooms, loading, currentHotelId, hotel } = useAppStore()
+  const { rooms, createRoom, updateRoom, deleteRoom, fetchRooms, loading, currentHotelId, hotel } = useAppStore()
 
   useEffect(() => {
     if (currentHotelId) {
@@ -81,21 +150,26 @@ export function RoomsView() {
     }
   }, [currentHotelId, fetchRooms])
 
+  // ── Add Room Dialog State ──
   const [showAddDialog, setShowAddDialog] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [newRoom, setNewRoom] = useState({
-    name: '',
-    roomNumber: '',
-    type: 'double',
-    basePrice: 0,
-    maxGuests: 2,
-    description: '',
-    amenities: '',
-  })
+  const [addSubmitting, setAddSubmitting] = useState(false)
+  const [newRoom, setNewRoom] = useState<RoomFormData>(defaultFormData)
 
+  // ── Edit Room Dialog State ──
+  const [editingRoom, setEditingRoom] = useState<ApiRoom | null>(null)
+  const [editForm, setEditForm] = useState<RoomFormData>(defaultFormData)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
+  // ── Delete Room Dialog State ──
+  const [deletingRoom, setDeletingRoom] = useState<ApiRoom | null>(null)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+
+  const currencySymbol = hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+
+  // ── Add Room Handler ──
   const handleAddRoom = async () => {
     if (!newRoom.name || !newRoom.roomNumber) return
-    setSubmitting(true)
+    setAddSubmitting(true)
     try {
       const amenitiesArray = newRoom.amenities
         ? newRoom.amenities.split(',').map((s) => s.trim()).filter(Boolean)
@@ -109,31 +183,214 @@ export function RoomsView() {
         maxGuests: newRoom.maxGuests,
         description: newRoom.description || undefined,
         amenities: amenitiesArray,
+        floor: newRoom.floor,
+        bedType: newRoom.bedType || undefined,
       })
 
       if (result) {
         toast.success('Room added successfully')
         setShowAddDialog(false)
-        setNewRoom({
-          name: '',
-          roomNumber: '',
-          type: 'double',
-          basePrice: 0,
-          maxGuests: 2,
-          description: '',
-          amenities: '',
-        })
+        setNewRoom(defaultFormData)
       } else {
         toast.error('Failed to add room. Please try again.')
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add room')
     } finally {
-      setSubmitting(false)
+      setAddSubmitting(false)
     }
   }
 
-  const currencySymbol = hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+  // ── Edit Room Handlers ──
+  const handleOpenEdit = (room: ApiRoom) => {
+    setEditingRoom(room)
+    setEditForm(roomToFormData(room))
+  }
+
+  const handleCloseEdit = () => {
+    setEditingRoom(null)
+    setEditForm(defaultFormData)
+  }
+
+  const handleEditRoom = async () => {
+    if (!editingRoom || !editForm.name || !editForm.roomNumber) return
+    setEditSubmitting(true)
+    try {
+      const amenitiesArray = editForm.amenities
+        ? editForm.amenities.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined
+
+      const result = await updateRoom(editingRoom.id, {
+        name: editForm.name,
+        roomNumber: editForm.roomNumber,
+        type: editForm.type,
+        basePrice: editForm.basePrice,
+        maxGuests: editForm.maxGuests,
+        description: editForm.description || undefined,
+        amenities: amenitiesArray,
+        floor: editForm.floor,
+        bedType: editForm.bedType || undefined,
+      })
+
+      if (result) {
+        toast.success('Room updated successfully')
+        handleCloseEdit()
+      } else {
+        toast.error('Failed to update room. Please try again.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update room')
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  // ── Delete Room Handler ──
+  const handleDeleteRoom = async () => {
+    if (!deletingRoom) return
+    setDeleteSubmitting(true)
+    try {
+      const success = await deleteRoom(deletingRoom.id)
+      if (success) {
+        toast.success('Room deleted successfully')
+        setDeletingRoom(null)
+      } else {
+        toast.error('Failed to delete room. Please try again.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete room')
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
+  // ── Shared Room Form ──
+  const RoomFormFields = ({
+    form,
+    setForm,
+    disabled,
+  }: {
+    form: RoomFormData
+    setForm: React.Dispatch<React.SetStateAction<RoomFormData>>
+    disabled?: boolean
+  }) => (
+    <div className="space-y-4 py-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Room Number</Label>
+          <Input
+            placeholder="e.g., 401"
+            value={form.roomNumber}
+            onChange={(e) => setForm({ ...form, roomNumber: e.target.value })}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Room Name</Label>
+          <Input
+            placeholder="e.g., Deluxe Ocean View"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Room Type</Label>
+          <Select
+            value={form.type}
+            onValueChange={(v) => setForm({ ...form, type: v })}
+            disabled={disabled}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {roomTypeOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Base Price ({currencySymbol})</Label>
+          <Input
+            type="number"
+            placeholder="150"
+            value={form.basePrice || ''}
+            onChange={(e) => setForm({ ...form, basePrice: parseInt(e.target.value) || 0 })}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Max Guests</Label>
+          <Input
+            type="number"
+            placeholder="2"
+            value={form.maxGuests}
+            onChange={(e) => setForm({ ...form, maxGuests: parseInt(e.target.value) || 2 })}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Floor</Label>
+          <Input
+            type="number"
+            placeholder="1"
+            value={form.floor || ''}
+            onChange={(e) => setForm({ ...form, floor: parseInt(e.target.value) || 1 })}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Bed Type</Label>
+        <Select
+          value={form.bedType}
+          onValueChange={(v) => setForm({ ...form, bedType: v })}
+          disabled={disabled}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select bed type" />
+          </SelectTrigger>
+          <SelectContent>
+            {bedTypeOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Description</Label>
+        <Textarea
+          placeholder="Brief description of the room"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          rows={3}
+          disabled={disabled}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Amenities</Label>
+        <Input
+          placeholder="WiFi, TV, Air Conditioning, Mini Bar"
+          value={form.amenities}
+          onChange={(e) => setForm({ ...form, amenities: e.target.value })}
+          disabled={disabled}
+        />
+        <p className="text-xs text-muted-foreground">
+          Separate amenities with commas
+        </p>
+      </div>
+    </div>
+  )
 
   return (
     <motion.div
@@ -192,19 +449,21 @@ export function RoomsView() {
                 <Card className="h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <CardTitle className="flex items-center gap-2">
                           <Bed className="h-4 w-4 text-muted-foreground" />
                           {room.roomNumber}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">{room.name}</p>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={cn('text-xs capitalize', config.bg, config.color)}
-                      >
-                        {config.label}
-                      </Badge>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge
+                          variant="outline"
+                          className={cn('text-xs capitalize', config.bg, config.color)}
+                        >
+                          {config.label}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -255,6 +514,28 @@ export function RoomsView() {
                         )}
                       </div>
                     )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-1 border-t mt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 flex-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => handleOpenEdit(room)}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 flex-1 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => setDeletingRoom(room)}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -265,90 +546,12 @@ export function RoomsView() {
 
       {/* Add Room Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Room</DialogTitle>
             <DialogDescription>Add a new room to your hotel inventory</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Room Number</Label>
-                <Input
-                  placeholder="e.g., 401"
-                  value={newRoom.roomNumber}
-                  onChange={(e) => setNewRoom({ ...newRoom, roomNumber: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Room Name</Label>
-                <Input
-                  placeholder="e.g., Deluxe Ocean View"
-                  value={newRoom.name}
-                  onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Room Type</Label>
-                <Select
-                  value={newRoom.type}
-                  onValueChange={(v) => setNewRoom({ ...newRoom, type: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="double">Double</SelectItem>
-                    <SelectItem value="twin">Twin</SelectItem>
-                    <SelectItem value="suite">Suite</SelectItem>
-                    <SelectItem value="family">Family</SelectItem>
-                    <SelectItem value="dormitory">Dormitory</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Base Price ({currencySymbol})</Label>
-                <Input
-                  type="number"
-                  placeholder="150"
-                  value={newRoom.basePrice || ''}
-                  onChange={(e) => setNewRoom({ ...newRoom, basePrice: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Max Guests</Label>
-              <Input
-                type="number"
-                placeholder="2"
-                value={newRoom.maxGuests}
-                onChange={(e) => setNewRoom({ ...newRoom, maxGuests: parseInt(e.target.value) || 2 })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea
-                placeholder="Brief description of the room"
-                value={newRoom.description}
-                onChange={(e) => setNewRoom({ ...newRoom, description: e.target.value })}
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Amenities</Label>
-              <Input
-                placeholder="WiFi, TV, Air Conditioning, Mini Bar"
-                value={newRoom.amenities}
-                onChange={(e) => setNewRoom({ ...newRoom, amenities: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Separate amenities with commas
-              </p>
-            </div>
-          </div>
+          <RoomFormFields form={newRoom} setForm={setNewRoom} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
@@ -356,13 +559,103 @@ export function RoomsView() {
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleAddRoom}
-              disabled={submitting || !newRoom.name || !newRoom.roomNumber}
+              disabled={addSubmitting || !newRoom.name || !newRoom.roomNumber}
             >
-              {submitting ? 'Adding...' : 'Add Room'}
+              {addSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Room'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Room Dialog */}
+      <Dialog open={!!editingRoom} onOpenChange={(open) => !open && handleCloseEdit()}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Edit Room
+            </DialogTitle>
+            <DialogDescription>
+              Update the details for {editingRoom?.roomNumber} — {editingRoom?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <RoomFormFields form={editForm} setForm={setEditForm} />
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseEdit}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleEditRoom}
+              disabled={editSubmitting || !editForm.name || !editForm.roomNumber}
+            >
+              {editSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Room Confirmation */}
+      <AlertDialog open={!!deletingRoom} onOpenChange={(open) => !open && setDeletingRoom(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Room</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Are you sure you want to delete room{' '}
+                  <span className="font-semibold">{deletingRoom?.roomNumber} — {deletingRoom?.name}</span>?
+                  This action will deactivate the room and remove it from your active inventory.
+                </p>
+                {(deletingRoom?._count?.bookings ?? 0) > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm font-medium text-amber-800">
+                      ⚠ This room has {deletingRoom?._count?.bookings} booking(s) on record.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Existing bookings will not be affected, but no new bookings can be made for this room.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleDeleteRoom}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Room
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

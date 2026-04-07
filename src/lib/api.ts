@@ -175,6 +175,57 @@ export interface ApiHotel {
   }
 }
 
+// ─── Global Search ──────────────────────────────────────────────────────────
+
+export interface SearchBookingResult {
+  id: string
+  confirmationCode: string
+  checkInDate: string
+  checkOutDate: string
+  numNights: number
+  totalPrice: number
+  currency: string
+  status: string
+  room: { id: string; name: string; roomNumber: string; type: string } | null
+  guest: { id: string; firstName: string; lastName: string; email: string | null } | null
+  channel: { id: string; name: string } | null
+}
+
+export interface SearchGuestResult {
+  id: string
+  firstName: string
+  lastName: string
+  email: string | null
+  phone: string | null
+  vip: boolean
+  totalStays: number
+}
+
+export interface SearchRoomResult {
+  id: string
+  name: string
+  roomNumber: string
+  type: string
+  status: string
+  basePrice: number
+  floor: number | null
+}
+
+export interface SearchChannelResult {
+  id: string
+  name: string
+  type: string
+  isActive: boolean
+  syncMethod: string
+}
+
+export interface SearchResults {
+  bookings: SearchBookingResult[]
+  guests: SearchGuestResult[]
+  rooms: SearchRoomResult[]
+  channels: SearchChannelResult[]
+}
+
 // ─── Dashboard Stats ─────────────────────────────────────────────────────────
 
 export interface DashboardStats {
@@ -322,6 +373,72 @@ export interface RegisterResponse {
   }
 }
 
+// ─── Dynamic Pricing & Coupons ─────────────────────────────────────────────
+
+export interface AppliedRule {
+  id: string
+  name: string
+  ruleType: string
+  adjustmentType: string
+  adjustmentValue: number
+  priceBefore: number
+  priceAfter: number
+}
+
+export interface PriceCalculation {
+  roomId: string
+  hotelId: string
+  date: string
+  basePrice: number
+  finalPrice: number
+  appliedRules: AppliedRule[]
+  currentOccupancyPercent: number
+}
+
+export interface NightlyPrice {
+  date: string
+  basePrice: number
+  finalPrice: number
+  appliedRules: AppliedRule[]
+}
+
+export interface PricingBreakdown {
+  nightlyPrices: NightlyPrice[]
+  baseTotal: number
+  adjustmentsTotal: number
+  dynamicTotal: number
+  couponDiscount: number
+  couponCode: string | null
+  couponType: string | null
+  finalTotal: number
+}
+
+export interface CouponValidation {
+  valid: boolean
+  reason?: string
+  couponId?: string
+  code?: string
+  type?: string
+  value?: number
+  discount?: number
+  remainingUses?: number | null
+  minStay?: number
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: string
+  type: string
+  channel: string
+  status: string
+  subject: string | null
+  body: string | null
+  createdAt: string
+  bookingId: string | null
+  guestId: string | null
+}
+
 // ─── Input Types for Create/Update operations ────────────────────────────────
 
 export interface CreateBookingInput {
@@ -338,6 +455,7 @@ export interface CreateBookingInput {
   guestLastName?: string
   guestEmail?: string
   guestPhone?: string
+  couponCode?: string
 }
 
 export interface CreateRoomInput {
@@ -733,6 +851,18 @@ class ApiClient {
     )
   }
 
+  async deleteGuest(
+    guestId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<{ message: string }>> {
+    return this.request<{ message: string }>(
+      `/guests/${encodeURIComponent(guestId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'DELETE',
+      },
+    )
+  }
+
   // ─── Channels ──────────────────────────────────────────────────────────────
 
   async getChannels(hotelId: string): Promise<ApiResponse<ApiChannel[]>> {
@@ -754,6 +884,73 @@ class ApiClient {
     )
   }
 
+  async updateChannel(
+    channelId: string,
+    hotelId: string,
+    data: Partial<CreateChannelInput & { isActive: boolean }>,
+  ): Promise<ApiResponse<ApiChannel>> {
+    return this.request<ApiChannel>(
+      `/channels/${encodeURIComponent(channelId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async deleteChannel(
+    channelId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<{ message: string }>> {
+    return this.request<{ message: string }>(
+      `/channels/${encodeURIComponent(channelId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'DELETE',
+      },
+    )
+  }
+
+  async importChannelICal(
+    channelId: string,
+  ): Promise<ApiResponse<{
+    channelName: string
+    eventsFound: number
+    eventsCreated: number
+    eventsUpdated: number
+    eventsCancelled: number
+    message: string
+  }>> {
+    return this.request(
+      `/channels/${encodeURIComponent(channelId)}/ical-import`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async syncAllChannels(): Promise<ApiResponse<{
+    message: string
+    synced: number
+    results: Array<{ channelName: string; success: boolean; error?: string }>
+  }>> {
+    return this.request('/channels/sync-all', {
+      method: 'POST',
+    })
+  }
+
+  // ─── Global Search ──────────────────────────────────────────────────────────
+
+  async globalSearch(
+    hotelId: string,
+    query: string,
+  ): Promise<ApiResponse<SearchResults>> {
+    const sp = new URLSearchParams({
+      hotelId,
+      q: query,
+    })
+    return this.request<SearchResults>(`/search?${sp.toString()}`)
+  }
+
   // ─── Availability Calendar ─────────────────────────────────────────────────
 
   async getAvailability(
@@ -766,12 +963,63 @@ class ApiClient {
     )
   }
 
+  // ─── Dynamic Pricing ─────────────────────────────────────────────────────
+
+  async calculatePrice(
+    hotelId: string,
+    roomId: string,
+    date: string,
+    channelId?: string,
+  ): Promise<ApiResponse<PriceCalculation>> {
+    const sp = new URLSearchParams({ hotelId, roomId, date })
+    if (channelId) sp.set('channelId', channelId)
+    return this.request<PriceCalculation>(`/revenue/calculate?${sp.toString()}`)
+  }
+
+  async validateCoupon(
+    hotelId: string,
+    code: string,
+    opts?: {
+      numNights?: number
+      channelId?: string
+    },
+  ): Promise<ApiResponse<CouponValidation>> {
+    return this.request<CouponValidation>('/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({
+        hotelId,
+        code,
+        ...(opts?.numNights !== undefined ? { numNights: opts.numNights } : {}),
+        ...(opts?.channelId ? { channelId: opts.channelId } : {}),
+      }),
+    })
+  }
+
   // ─── Dashboard ─────────────────────────────────────────────────────────────
 
   async getDashboardStats(hotelId: string): Promise<ApiResponse<DashboardStats>> {
     return this.request<DashboardStats>(
       `/dashboard?hotelId=${encodeURIComponent(hotelId)}`,
     )
+  }
+
+  // ─── Notifications ──────────────────────────────────────────────────────
+
+  async getNotifications(
+    hotelId: string,
+    limit?: number,
+  ): Promise<ApiResponse<NotificationItem[]>> {
+    const sp = new URLSearchParams({ hotelId })
+    if (limit) sp.set('limit', String(limit))
+    return this.request<NotificationItem[]>(`/notifications?${sp.toString()}`)
+  }
+
+  async markNotificationRead(
+    hotelId: string,
+    notificationId: string,
+  ): Promise<ApiResponse<{ id: string; status: string }>> {
+    const sp = new URLSearchParams({ hotelId, notificationId })
+    return this.request(`/notifications?${sp.toString()}`, { method: 'PATCH' })
   }
 
   // ─── Reports ───────────────────────────────────────────────────────────────
@@ -796,6 +1044,371 @@ class ApiClient {
     if (from) sp.set('from', from)
     if (to) sp.set('to', to)
     return this.request(`/reports/revenue?${sp.toString()}`)
+  }
+
+  // ─── Analytics ─────────────────────────────────────────────────────────────
+
+  async getAnalyticsKPIs(hotelId: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request(`/analytics/kpis?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async getAnalyticsTrends(hotelId: string, period: string): Promise<ApiResponse<Record<string, unknown>>> {
+    const sp = new URLSearchParams({ hotelId, period })
+    return this.request(`/analytics/trends?${sp.toString()}`)
+  }
+
+  async getAnalyticsChannels(hotelId: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request(`/analytics/channels?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  // ─── Housekeeping ─────────────────────────────────────────────────────────
+
+  async getHousekeepingTasks(
+    hotelId: string,
+    date?: string,
+  ): Promise<ApiResponse<unknown[]>> {
+    const sp = new URLSearchParams({ hotelId })
+    if (date) sp.set('date', date)
+    return this.request(`/housekeeping?${sp.toString()}`)
+  }
+
+  async createHousekeepingTask(
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/housekeeping?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateHousekeepingTask(
+    taskId: string,
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/housekeeping/${encodeURIComponent(taskId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async bulkGenerateHousekeepingTasks(
+    hotelId: string,
+    data: { date: string },
+  ): Promise<ApiResponse<{ createdCount: number }>> {
+    return this.request(`/housekeeping/bulk?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // ─── Revenue Rules ────────────────────────────────────────────────────────
+
+  async getRevenueRules(hotelId: string): Promise<ApiResponse<unknown[]>> {
+    return this.request(`/revenue/rules?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async createRevenueRule(
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/revenue/rules?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateRevenueRule(
+    ruleId: string,
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/revenue/rules/${encodeURIComponent(ruleId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async deleteRevenueRule(
+    ruleId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/revenue/rules/${encodeURIComponent(ruleId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      { method: 'DELETE' },
+    )
+  }
+
+  // ─── Coupons ───────────────────────────────────────────────────────────────
+
+  async getCoupons(hotelId: string): Promise<ApiResponse<unknown[]>> {
+    return this.request(`/coupons?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async createCoupon(
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/coupons?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateCoupon(
+    couponId: string,
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/coupons/${encodeURIComponent(couponId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async deleteCoupon(
+    couponId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/coupons/${encodeURIComponent(couponId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      { method: 'DELETE' },
+    )
+  }
+
+  // ─── Loyalty ──────────────────────────────────────────────────────────────
+
+  async getLoyaltyGuests(
+    hotelId: string,
+    params?: { search?: string; limit?: number; sortBy?: string },
+  ): Promise<ApiResponse<{ guests: unknown[] }>> {
+    const sp = new URLSearchParams({ hotelId, limit: '50' })
+    if (params?.search) sp.set('search', params.search)
+    if (params?.sortBy) sp.set('sortBy', params.sortBy)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    return this.request(`/loyalty/guests?${sp.toString()}`)
+  }
+
+  async getLoyaltyConfig(
+    hotelId: string,
+  ): Promise<ApiResponse<{ loyaltyEnabled: boolean; loyaltyPointsPerCurrency?: number }>> {
+    return this.request(`/loyalty/config?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async updateLoyaltyConfig(
+    hotelId: string,
+    data: { loyaltyEnabled: boolean; loyaltyPointsPerCurrency: number },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/loyalty/config`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hotelId, ...data }),
+    })
+  }
+
+  async getLoyaltyGuestDetail(
+    guestId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/loyalty/guests/${encodeURIComponent(guestId)}?hotelId=${encodeURIComponent(hotelId)}`,
+    )
+  }
+
+  async redeemLoyaltyPoints(
+    guestId: string,
+    hotelId: string,
+    data: { points: number },
+  ): Promise<ApiResponse<{ discountAmount: number }>> {
+    return this.request(
+      `/loyalty/guests/${encodeURIComponent(guestId)}/redeem?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async adjustLoyaltyPoints(
+    guestId: string,
+    hotelId: string,
+    data: { points: number; reason: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/loyalty/guests/${encodeURIComponent(guestId)}/adjust?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  // ─── Reviews ──────────────────────────────────────────────────────────────
+
+  async getReviews(
+    hotelId: string,
+    params?: {
+      minRating?: string
+      hasResponse?: string
+      sortBy?: string
+      limit?: number
+    },
+  ): Promise<ApiResponse<{ reviews: unknown[]; stats: unknown }>> {
+    const sp = new URLSearchParams({ hotelId, limit: '50' })
+    if (params?.minRating && params.minRating !== 'all') sp.set('minRating', params.minRating)
+    if (params?.hasResponse && params.hasResponse !== 'all') sp.set('hasResponse', params.hasResponse)
+    if (params?.sortBy) sp.set('sortBy', params.sortBy)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    return this.request(`/reviews?${sp.toString()}`)
+  }
+
+  async respondToReview(
+    reviewId: string,
+    hotelId: string,
+    data: { response: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/reviews/${encodeURIComponent(reviewId)}/respond?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async requestReview(
+    data: { bookingId: string; hotelId: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request('/reviews/request', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // ─── Night Audit ──────────────────────────────────────────────────────────
+
+  async getNightAudits(hotelId: string): Promise<ApiResponse<unknown[]>> {
+    return this.request(`/night-audit?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async getLatestNightAudit(hotelId: string): Promise<ApiResponse<unknown>> {
+    return this.request(`/night-audit/latest?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async runNightAudit(
+    hotelId: string,
+    data: { date: string; notes: string | null; auditorId?: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/night-audit/run?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // ─── Cancellation Policies ────────────────────────────────────────────────
+
+  async getCancellationPolicies(hotelId: string): Promise<ApiResponse<unknown[]>> {
+    return this.request(`/cancellation-policies?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  async createCancellationPolicy(
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/cancellation-policies?hotelId=${encodeURIComponent(hotelId)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateCancellationPolicy(
+    policyId: string,
+    hotelId: string,
+    data: Record<string, unknown>,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/cancellation-policies/${encodeURIComponent(policyId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async deleteCancellationPolicy(
+    policyId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/cancellation-policies/${encodeURIComponent(policyId)}?hotelId=${encodeURIComponent(hotelId)}`,
+      { method: 'DELETE' },
+    )
+  }
+
+  // ─── Audit Logs ──────────────────────────────────────────────────────────
+
+  async getAuditLogs(
+    hotelId: string,
+    params?: {
+      limit?: number
+      offset?: number
+      entityType?: string
+      action?: string
+    },
+  ): Promise<ApiResponse<{ logs: unknown[]; pagination: PaginationInfo }>> {
+    const sp = new URLSearchParams({ hotelId, limit: String(params?.limit || 50), offset: String(params?.offset || 0) })
+    if (params?.entityType && params.entityType !== 'all') sp.set('entityType', params.entityType)
+    if (params?.action && params.action !== 'all') sp.set('action', params.action)
+    return this.request(`/audit-logs?${sp.toString()}`)
+  }
+
+  async getAuditLogDetail(
+    logId: string,
+    hotelId: string,
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(
+      `/audit-logs/${encodeURIComponent(logId)}?hotelId=${encodeURIComponent(hotelId)}`,
+    )
+  }
+
+  // ─── Rate Parity ──────────────────────────────────────────────────────────
+
+  async getRateParity(hotelId: string): Promise<ApiResponse<unknown>> {
+    return this.request(`/rate-parity?hotelId=${encodeURIComponent(hotelId)}`)
+  }
+
+  // ─── AI Concierge ────────────────────────────────────────────────────────
+
+  async getAIChatHistory(bookingId: string): Promise<ApiResponse<{ messages: unknown[] }>> {
+    return this.request(`/ai/chat?bookingId=${encodeURIComponent(bookingId)}`)
+  }
+
+  async sendAIChatMessage(
+    data: { bookingId: string; message: string; guestId?: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async sendPortalMessage(
+    portalCode: string,
+    data: { content: string },
+  ): Promise<ApiResponse<unknown>> {
+    return this.request(`/portal/${encodeURIComponent(portalCode)}/message`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 }
 

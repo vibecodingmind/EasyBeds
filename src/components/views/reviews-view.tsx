@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface ReviewItem {
@@ -87,15 +88,14 @@ export function ReviewsView() {
     if (!currentHotelId) return
     setLoading(true)
     try {
-      const sp = new URLSearchParams({ hotelId: currentHotelId, limit: '50' })
-      if (filters.minRating) sp.set('minRating', filters.minRating)
-      if (filters.hasResponse) sp.set('hasResponse', filters.hasResponse)
-      if (filters.sortBy) sp.set('sortBy', filters.sortBy)
-      const res = await fetch(`/api/reviews?${sp}`)
-      const json = await res.json()
-      if (json.success) {
-        setReviews(json.data.reviews)
-        setStats(json.data.stats)
+      const res = await api.getReviews(currentHotelId, {
+        minRating: filters.minRating,
+        hasResponse: filters.hasResponse,
+        sortBy: filters.sortBy,
+      })
+      if (res.success) {
+        setReviews(res.data.reviews as ReviewItem[])
+        setStats(res.data.stats as ReviewStats)
       }
     } catch { console.error('Failed to fetch reviews') } finally { setLoading(false) }
   }, [currentHotelId, filters])
@@ -114,18 +114,13 @@ export function ReviewsView() {
     if (!selectedReview || !responseText.trim()) return
     setResponding(true)
     try {
-      const res = await fetch(`/api/reviews/${selectedReview.id}/respond?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ response: responseText.trim() }),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.respondToReview(selectedReview.id, currentHotelId, { response: responseText.trim() })
+      if (res.success) {
         toast.success('Response submitted')
         setRespondOpen(false)
         setResponseText('')
         fetchReviews()
-      } else { toast.error(json.error) }
+      } else { toast.error(res.error) }
     } catch { toast.error('Failed to submit response') } finally { setResponding(false) }
   }
 
@@ -133,14 +128,9 @@ export function ReviewsView() {
     if (!requestBookingId.trim()) return
     setRequestSending(true)
     try {
-      const res = await fetch('/api/reviews/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ bookingId: requestBookingId.trim(), hotelId: currentHotelId }),
-      })
-      const json = await res.json()
-      if (json.success) { toast.success('Review request sent'); setRequestBookingId('') }
-      else { toast.error(json.error) }
+      const res = await api.requestReview({ bookingId: requestBookingId.trim(), hotelId: currentHotelId })
+      if (res.success) { toast.success('Review request sent'); setRequestBookingId('') }
+      else { toast.error(res.error) }
     } catch { toast.error('Failed to request review') } finally { setRequestSending(false) }
   }
 

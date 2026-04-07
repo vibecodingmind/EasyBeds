@@ -1,11 +1,24 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, signJwt } from '@/lib/auth';
 import { addDays, subDays, format } from 'date-fns';
 
+const SEED_SECRET = process.env.SEED_SECRET || 'easybeds-seed-dev';
+
 // POST /api/seed — Creates demo hotel with rooms, bookings, channels, guests
-export async function POST() {
+// Protected: requires SEED_SECRET header or non-production environment
+export async function POST(request: NextRequest) {
   try {
+    // ── Security: block in production unless SEED_SECRET header matches ─────
+    if (process.env.NODE_ENV === 'production') {
+      const secretHeader = request.headers.get('x-seed-secret');
+      if (!secretHeader || secretHeader !== SEED_SECRET) {
+        return NextResponse.json(
+          { success: false, error: 'Seed endpoint is disabled in production.' },
+          { status: 403 }
+        );
+      }
+    }
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
 
@@ -40,7 +53,7 @@ export async function POST() {
       const adminUser = await tx.user.create({
         data: {
           email: 'admin@easybeds.com',
-          passwordHash: hashPassword('admin123'),
+          passwordHash: await hashPassword('admin123'),
           name: 'Platform Admin',
           emailVerified: true,
           role: 'admin',
@@ -50,7 +63,7 @@ export async function POST() {
       const ownerUser = await tx.user.create({
         data: {
           email: 'owner@easybeds.com',
-          passwordHash: hashPassword('owner123'),
+          passwordHash: await hashPassword('owner123'),
           name: 'John Owera',
           emailVerified: true,
           role: 'user',
@@ -60,7 +73,7 @@ export async function POST() {
       const managerUser = await tx.user.create({
         data: {
           email: 'manager@easybeds.com',
-          passwordHash: hashPassword('manager123'),
+          passwordHash: await hashPassword('manager123'),
           name: 'Grace Mwangi',
           emailVerified: true,
           role: 'user',
@@ -70,7 +83,7 @@ export async function POST() {
       const staffUser = await tx.user.create({
         data: {
           email: 'staff@easybeds.com',
-          passwordHash: hashPassword('staff123'),
+          passwordHash: await hashPassword('staff123'),
           name: 'Peter Kimaro',
           emailVerified: true,
           role: 'user',
@@ -80,7 +93,7 @@ export async function POST() {
       const housekeepingUser = await tx.user.create({
         data: {
           email: 'housekeeping@easybeds.com',
-          passwordHash: hashPassword('house123'),
+          passwordHash: await hashPassword('house123'),
           name: 'Fatima Hassan',
           emailVerified: true,
           role: 'user',

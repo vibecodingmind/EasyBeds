@@ -2,6 +2,57 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, signJwt } from '@/lib/auth';
 
+// ── In-memory rate limiting ──────────────────────────────────────────────────
+// Max 5 login attempts per email per 15 minutes
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+interface RateLimitEntry {
+  attempts: number;
+  windowStart: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(email: string): { allowed: boolean; retryAfterMs: number } {
+  const normalizedEmail = email.toLowerCase().trim();
+  const now = Date.now();
+
+  const entry = rateLimitStore.get(normalizedEmail);
+
+  if (!entry) {
+    rateLimitStore.set(normalizedEmail, { attempts: 1, windowStart: now });
+    return { allowed: true, retryAfterMs: 0 };
+  }
+
+  // If window expired, reset
+  if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitStore.set(normalizedEmail, { attempts: 1, windowStart: now });
+    return { allowed: true, retryAfterMs: 0 };
+  }
+
+  // Check if rate limited
+  if (entry.attempts >= RATE_LIMIT_MAX) {
+    const retryAfterMs = RATE_LIMIT_WINDOW_MS - (now - entry.windowStart);
+    return { allowed: false, retryAfterMs };
+  }
+
+  // Increment attempts
+  entry.attempts += 1;
+  rateLimitStore.set(normalizedEmail, entry);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+// Periodically clean up expired entries to prevent memory leaks (every 10 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
 // POST /api/auth/login
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +63,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required.' },
         { status: 400 }
+      );
+    }
+
+    // ── Rate limiting check ──────────────────────────────────────────────
+    const { allowed, retryAfterMs } = checkRateLimit(email);
+    if (!allowed) {
+      const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Too many login attempts. Please try again in ${retryAfterSec} seconds.`,
+          code: 'RATE_LIMITED',
+          retryAfter: retryAfterSec,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSec),
+          },
+        }
       );
     }
 
@@ -33,7 +104,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password.' },
         { status: 401 }

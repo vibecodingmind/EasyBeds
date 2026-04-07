@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import React, { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Radio,
   Globe,
@@ -16,6 +16,9 @@ import {
   CheckCircle2,
   CalendarDays,
   Percent,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,6 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -38,10 +42,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useAppStore } from '@/lib/store'
+import { api, type ApiChannel } from '@/lib/api'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+
+// ─── Constants ──────────────────────────────────────────────────────────────────
 
 const typeIcons: Record<string, React.ElementType> = {
   ota: Globe,
@@ -92,8 +109,137 @@ const channelTypeLabels: Record<string, string> = {
   agent: 'Agent',
 }
 
+// ─── Form Data Types ────────────────────────────────────────────────────────────
+
+interface ChannelFormData {
+  name: string
+  type: string
+  syncMethod: string
+  icalUrl: string
+  commission: number
+  isActive: boolean
+}
+
+const emptyFormData: ChannelFormData = {
+  name: '',
+  type: 'ota',
+  syncMethod: 'ical',
+  icalUrl: '',
+  commission: 0,
+  isActive: true,
+}
+
+function channelToFormData(channel: ApiChannel): ChannelFormData {
+  return {
+    name: channel.name,
+    type: channel.type,
+    syncMethod: channel.syncMethod || 'manual',
+    icalUrl: channel.icalUrl || '',
+    commission: channel.commission || 0,
+    isActive: channel.isActive,
+  }
+}
+
+// ─── Reusable Form Fields ──────────────────────────────────────────────────────
+
+function ChannelFormFields({
+  formData,
+  setFormData,
+}: {
+  formData: ChannelFormData
+  setFormData: React.Dispatch<React.SetStateAction<ChannelFormData>>
+}) {
+  return (
+    <div className="space-y-4 py-4">
+      <div className="space-y-2">
+        <Label htmlFor="channel-name">Channel Name</Label>
+        <Input
+          id="channel-name"
+          placeholder="e.g., Expedia, Hotels.com"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="channel-type">Channel Type</Label>
+          <Select
+            value={formData.type}
+            onValueChange={(v) => setFormData({ ...formData, type: v })}
+          >
+            <SelectTrigger id="channel-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ota">OTA (Online Travel Agency)</SelectItem>
+              <SelectItem value="direct">Direct</SelectItem>
+              <SelectItem value="website">Website</SelectItem>
+              <SelectItem value="walkin">Walk-in</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="agent">Agent</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="channel-sync">Sync Method</Label>
+          <Select
+            value={formData.syncMethod}
+            onValueChange={(v) => setFormData({ ...formData, syncMethod: v })}
+          >
+            <SelectTrigger id="channel-sync">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ical">iCal Sync</SelectItem>
+              <SelectItem value="api">API Integration</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <AnimatePresence>
+        {formData.syncMethod === 'ical' && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="channel-ical">iCal URL</Label>
+              <Input
+                id="channel-ical"
+                placeholder="https://example.com/calendar.ics"
+                value={formData.icalUrl}
+                onChange={(e) => setFormData({ ...formData, icalUrl: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required for iCal sync method
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="space-y-2">
+        <Label htmlFor="channel-commission">Commission (%)</Label>
+        <Input
+          id="channel-commission"
+          type="number"
+          placeholder="15"
+          value={formData.commission || ''}
+          onChange={(e) => setFormData({ ...formData, commission: parseInt(e.target.value) || 0 })}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────────
+
 export function ChannelsView() {
-  const { channels, createChannel, fetchChannels, loading, currentHotelId } = useAppStore()
+  const { channels, createChannel, updateChannel, deleteChannel, fetchChannels, loading, currentHotelId } = useAppStore()
 
   useEffect(() => {
     if (currentHotelId) {
@@ -101,19 +247,32 @@ export function ChannelsView() {
     }
   }, [currentHotelId, fetchChannels])
 
+  // ── Dialog State ──
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
+  const [importChannelId, setImportChannelId] = useState<string | null>(null)
   const [importUrl, setImportUrl] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [newChannel, setNewChannel] = useState({
-    name: '',
-    type: 'ota',
-    syncMethod: 'ical',
-    icalUrl: '',
-    commission: 0,
-  })
 
+  // ── Form State ──
+  const [submitting, setSubmitting] = useState(false)
+  const [newChannel, setNewChannel] = useState<ChannelFormData>({ ...emptyFormData })
+  const [editChannel, setEditChannel] = useState<ChannelFormData>({ ...emptyFormData })
+  const [editChannelId, setEditChannelId] = useState<string | null>(null)
+  const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // ── Sync State ──
+  const [syncingChannelId, setSyncingChannelId] = useState<string | null>(null)
+  const [importSubmitting, setImportSubmitting] = useState(false)
+
+  // ── Derived ──
+  const deleteChannelData = channels.find((c) => c.id === deleteChannelId)
+  const editChannelData = channels.find((c) => c.id === editChannelId)
+
+  // ── Handlers ──
   const handleCopy = (url: string, id: string) => {
     navigator.clipboard?.writeText(url)
     setCopiedId(id)
@@ -130,18 +289,13 @@ export function ChannelsView() {
         syncMethod: newChannel.syncMethod,
         icalUrl: newChannel.icalUrl || undefined,
         commission: newChannel.commission || undefined,
+        isActive: true,
       })
 
       if (result) {
         toast.success('Channel added successfully')
         setShowAddDialog(false)
-        setNewChannel({
-          name: '',
-          type: 'ota',
-          syncMethod: 'ical',
-          icalUrl: '',
-          commission: 0,
-        })
+        setNewChannel({ ...emptyFormData })
       } else {
         toast.error('Failed to add channel. Please try again.')
       }
@@ -149,6 +303,127 @@ export function ChannelsView() {
       toast.error(err instanceof Error ? err.message : 'Failed to add channel')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleOpenEdit = useCallback((channel: ApiChannel) => {
+    setEditChannelId(channel.id)
+    setEditChannel(channelToFormData(channel))
+    setShowEditDialog(true)
+  }, [])
+
+  const handleUpdateChannel = async () => {
+    if (!editChannelId || !editChannel.name) return
+    setSubmitting(true)
+    try {
+      const result = await updateChannel(editChannelId, {
+        name: editChannel.name,
+        type: editChannel.type,
+        syncMethod: editChannel.syncMethod,
+        icalUrl: editChannel.icalUrl || undefined,
+        commission: editChannel.commission || undefined,
+        isActive: editChannel.isActive,
+      })
+
+      if (result) {
+        toast.success('Channel updated successfully')
+        setShowEditDialog(false)
+        setEditChannelId(null)
+        setEditChannel({ ...emptyFormData })
+      } else {
+        toast.error('Failed to update channel. Please try again.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update channel')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleOpenDelete = useCallback((channel: ApiChannel) => {
+    setDeleteChannelId(channel.id)
+    setShowDeleteDialog(true)
+  }, [])
+
+  const handleDeleteChannel = async () => {
+    if (!deleteChannelId) return
+    setDeleting(true)
+    try {
+      const success = await deleteChannel(deleteChannelId)
+      if (success) {
+        toast.success(`"${deleteChannelData?.name}" has been deleted`)
+        setShowDeleteDialog(false)
+        setDeleteChannelId(null)
+      } else {
+        toast.error('Failed to delete channel. It may have existing bookings.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete channel')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleSyncChannel = useCallback(async (channel: ApiChannel) => {
+    if (syncingChannelId) return // Prevent double-click
+    if (channel.syncMethod !== 'ical' && channel.syncMethod !== 'api') {
+      toast.info(`"${channel.name}" uses manual sync — configure iCal or API integration first.`)
+      return
+    }
+
+    setSyncingChannelId(channel.id)
+    try {
+      const result = await api.importChannelICal(channel.id)
+      if (result.success) {
+        toast.success(`${result.data.channelName}: ${result.data.message}`)
+        // Refresh channels to get updated lastSyncAt
+        await fetchChannels()
+      } else {
+        toast.error(result.error || `Failed to sync "${channel.name}"`)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Failed to sync "${channel.name}"`)
+    } finally {
+      setSyncingChannelId(null)
+    }
+  }, [syncingChannelId, fetchChannels])
+
+  const handleImportICal = async () => {
+    if (!importUrl) return
+    setImportSubmitting(true)
+    try {
+      // If a specific channel was selected, use that; otherwise find an ical channel
+      let targetChannelId = importChannelId
+      if (!targetChannelId) {
+        const icalChannel = channels.find((c) => c.syncMethod === 'ical' && c.isActive)
+        if (!icalChannel) {
+          toast.error('No active iCal channel found. Please add an iCal channel first.')
+          setImportSubmitting(false)
+          return
+        }
+        targetChannelId = icalChannel.id
+      }
+
+      // First update the channel's iCal URL if it changed
+      const channel = channels.find((c) => c.id === targetChannelId)
+      if (channel && channel.icalUrl !== importUrl) {
+        await updateChannel(targetChannelId, { icalUrl: importUrl })
+      }
+
+      const result = await api.importChannelICal(targetChannelId)
+      if (result.success) {
+        toast.success(`${result.data.channelName}: ${result.data.message}`)
+        setShowImportDialog(false)
+        setImportUrl('')
+        setImportChannelId(null)
+        await fetchChannels()
+      } else {
+        toast.error(result.error || 'Import failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setImportSubmitting(false)
     }
   }
 
@@ -176,13 +451,13 @@ export function ChannelsView() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+          <Button variant="outline" onClick={() => { setImportChannelId(null); setImportUrl(''); setShowImportDialog(true) }}>
             <Link className="mr-2 h-4 w-4" />
             Import iCal
           </Button>
           <Button
             className="bg-emerald-600 hover:bg-emerald-700"
-            onClick={() => setShowAddDialog(true)}
+            onClick={() => { setNewChannel({ ...emptyFormData }); setShowAddDialog(true) }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Channel
@@ -224,7 +499,7 @@ export function ChannelsView() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * idx }}
               >
-                <Card className="h-full">
+                <Card className="group h-full transition-shadow hover:shadow-md">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -243,17 +518,44 @@ export function ChannelsView() {
                           </p>
                         </div>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'text-xs',
-                          channel.isActive
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-red-200 bg-red-50 text-red-700',
-                        )}
-                      >
-                        {channel.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {/* Action icon buttons — visible on hover */}
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-center gap-0.5"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-emerald-600"
+                            onClick={() => handleOpenEdit(channel)}
+                            title="Edit channel"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                            onClick={() => handleOpenDelete(channel)}
+                            title="Delete channel"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </motion.div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            channel.isActive
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-red-200 bg-red-50 text-red-700',
+                          )}
+                        >
+                          {channel.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -319,12 +621,27 @@ export function ChannelsView() {
                     )}
 
                     <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleOpenEdit(channel)}
+                      >
                         <ExternalLink className="mr-1 h-3.5 w-3.5" />
                         Configure
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        disabled={syncingChannelId === channel.id}
+                        onClick={() => handleSyncChannel(channel)}
+                      >
+                        {syncingChannelId === channel.id ? (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                        )}
                         Sync Now
                       </Button>
                     </div>
@@ -337,7 +654,7 @@ export function ChannelsView() {
           {/* Add Channel Placeholder Card */}
           <Card
             className="flex cursor-pointer items-center justify-center border-dashed"
-            onClick={() => setShowAddDialog(true)}
+            onClick={() => { setNewChannel({ ...emptyFormData }); setShowAddDialog(true) }}
           >
             <CardContent className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
               <Plus className="h-8 w-8" />
@@ -347,8 +664,8 @@ export function ChannelsView() {
         </div>
       )}
 
-      {/* Import iCal Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+      {/* ── Import iCal Dialog ── */}
+      <Dialog open={showImportDialog} onOpenChange={(open) => { if (!open) { setShowImportDialog(false); setImportUrl(''); setImportChannelId(null) } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Import iCal Calendar</DialogTitle>
@@ -357,9 +674,33 @@ export function ChannelsView() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {channels.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="import-target-channel">Target Channel</Label>
+                <Select
+                  value={importChannelId || '__auto__'}
+                  onValueChange={(v) => setImportChannelId(v === '__auto__' ? null : v)}
+                >
+                  <SelectTrigger id="import-target-channel">
+                    <SelectValue placeholder="Auto-detect iCal channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__auto__">Auto-detect active iCal channel</SelectItem>
+                    {channels
+                      .filter((c) => c.isActive)
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({channelTypeLabels[c.type] || c.type})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
-              <Label>iCal URL</Label>
+              <Label htmlFor="import-ical-url">iCal URL</Label>
               <Input
+                id="import-ical-url"
                 placeholder="https://example.com/calendar.ics"
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
@@ -374,24 +715,28 @@ export function ChannelsView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowImportDialog(false); setImportUrl(''); setImportChannelId(null) }}>
               Cancel
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
-              disabled={!importUrl}
-              onClick={() => {
-                setShowImportDialog(false)
-                setImportUrl('')
-              }}
+              disabled={!importUrl || importSubmitting}
+              onClick={handleImportICal}
             >
-              Import Calendar
+              {importSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                'Import Calendar'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Add Channel Dialog */}
+      {/* ── Add Channel Dialog ── */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
           <DialogHeader>
@@ -400,74 +745,7 @@ export function ChannelsView() {
               Connect a new booking channel to your hotel
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Channel Name</Label>
-              <Input
-                placeholder="e.g., Expedia, Hotels.com"
-                value={newChannel.name}
-                onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Channel Type</Label>
-                <Select
-                  value={newChannel.type}
-                  onValueChange={(v) => setNewChannel({ ...newChannel, type: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ota">OTA (Online Travel Agency)</SelectItem>
-                    <SelectItem value="direct">Direct</SelectItem>
-                    <SelectItem value="website">Website</SelectItem>
-                    <SelectItem value="walkin">Walk-in</SelectItem>
-                    <SelectItem value="phone">Phone</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="agent">Agent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Sync Method</Label>
-                <Select
-                  value={newChannel.syncMethod}
-                  onValueChange={(v) => setNewChannel({ ...newChannel, syncMethod: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ical">iCal Sync</SelectItem>
-                    <SelectItem value="api">API Integration</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>iCal URL</Label>
-              <Input
-                placeholder="https://example.com/calendar.ics"
-                value={newChannel.icalUrl}
-                onChange={(e) => setNewChannel({ ...newChannel, icalUrl: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Required for iCal sync method
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Commission (%)</Label>
-              <Input
-                type="number"
-                placeholder="15"
-                value={newChannel.commission || ''}
-                onChange={(e) => setNewChannel({ ...newChannel, commission: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-          </div>
+          <ChannelFormFields formData={newChannel} setFormData={setNewChannel} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
@@ -482,6 +760,95 @@ export function ChannelsView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Edit Channel Dialog ── */}
+      <Dialog
+        open={showEditDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowEditDialog(false)
+            setEditChannelId(null)
+            setEditChannel({ ...emptyFormData })
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Channel</DialogTitle>
+            <DialogDescription>
+              Update channel configuration for {editChannelData?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <ChannelFormFields formData={editChannel} setFormData={setEditChannel} />
+          {/* Active toggle */}
+          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <Label htmlFor="edit-active-toggle" className="text-sm font-medium">Active</Label>
+              <p className="text-xs text-muted-foreground">
+                Inactive channels won&apos;t receive new bookings
+              </p>
+            </div>
+            <Switch
+              id="edit-active-toggle"
+              checked={editChannel.isActive}
+              onCheckedChange={(checked) => setEditChannel({ ...editChannel, isActive: checked })}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowEditDialog(false); setEditChannelId(null) }}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={submitting || !editChannel.name}
+              onClick={handleUpdateChannel}
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Channel Confirmation ── */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Channel</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>&quot;{deleteChannelData?.name}&quot;</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteChannelData && (deleteChannelData._count?.bookings ?? 0) > 0 && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                This channel has <strong>{deleteChannelData._count?.bookings} booking(s)</strong>.
+                You may want to deactivate it instead of deleting.
+              </p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleDeleteChannel()
+              }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Channel'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

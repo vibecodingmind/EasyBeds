@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, signJwt } from '@/lib/auth';
+import { hash } from 'bcryptjs';
+import { sendEmail } from '@/lib/email';
+import { emailVerificationTemplate } from '@/lib/email-templates';
 
 // POST /api/auth/register — Hotel owner signup
 export async function POST(request: NextRequest) {
@@ -33,7 +36,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const passwordHash = hashPassword(password);
+    const passwordHash = await hashPassword(password);
+
+    // Generate email verification token
+    const verificationToken = crypto.randomUUID();
+    const hashedVerificationToken = await hash(verificationToken, 10);
+    const verificationExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Create User, Hotel, and HotelUser in a transaction
     const result = await db.$transaction(async (tx) => {
@@ -42,7 +50,9 @@ export async function POST(request: NextRequest) {
           email,
           passwordHash,
           name,
-          emailVerified: true,
+          emailVerified: false,
+          verificationToken: hashedVerificationToken,
+          verificationTokenExpiry: verificationExpiry,
         },
       });
 
@@ -68,6 +78,24 @@ export async function POST(request: NextRequest) {
       });
 
       return { user, hotel, hotelUser };
+    });
+
+    // Send verification email in background (don't block registration)
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || '';
+    const verifyLink = `${origin}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+
+    const template = emailVerificationTemplate({
+      name: result.user.name,
+      verifyLink,
+    });
+
+    // Fire and forget — don't await to keep registration fast
+    sendEmail({
+      to: result.user.email,
+      subject: template.subject,
+      html: template.html,
+    }).catch((err) => {
+      console.error('[REGISTER] Failed to send verification email:', err);
     });
 
     const token = signJwt({

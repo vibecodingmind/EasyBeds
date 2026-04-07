@@ -42,6 +42,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { format, parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -119,19 +120,15 @@ export function ActivityView() {
     if (!currentHotelId) return
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        hotelId: currentHotelId,
-        limit: String(limit),
-        offset: String(newOffset),
+      const res = await api.getAuditLogs(currentHotelId, {
+        limit,
+        offset: newOffset,
+        entityType: entityFilter,
+        action: actionFilter,
       })
-      if (entityFilter !== 'all') params.set('entityType', entityFilter)
-      if (actionFilter !== 'all') params.set('action', actionFilter)
-
-      const res = await fetch(`/api/audit-logs?${params.toString()}`)
-      const json = await res.json()
-      if (json.success) {
-        setLogs(json.data.logs)
-        setTotal(json.data.pagination.total)
+      if (res.success) {
+        setLogs(res.data.logs as AuditLog[])
+        setTotal(res.data.pagination.total)
         setOffset(newOffset)
       }
     } catch {
@@ -149,10 +146,9 @@ export function ActivityView() {
     if (!currentHotelId) return
     setLoadingDetail(true)
     try {
-      const res = await fetch(`/api/audit-logs/${log.id}?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) {
-        setSelectedLog(json.data)
+      const res = await api.getAuditLogDetail(log.id, currentHotelId)
+      if (res.success) {
+        setSelectedLog(res.data as AuditLogDetail)
       }
     } catch {
       toast.error('Failed to fetch log detail')

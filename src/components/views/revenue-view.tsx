@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { formatCurrency } from '@/lib/currency'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -184,9 +185,8 @@ export function RevenueView() {
   const fetchRules = useCallback(async () => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/revenue/rules?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setRules(json.data)
+      const res = await api.getRevenueRules(currentHotelId)
+      if (res.success) setRules(res.data as RateRule[])
     } catch (err) {
       console.error('Failed to fetch rules:', err)
     }
@@ -195,9 +195,8 @@ export function RevenueView() {
   const fetchCoupons = useCallback(async () => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/coupons?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setCoupons(json.data)
+      const res = await api.getCoupons(currentHotelId)
+      if (res.success) setCoupons(res.data as Coupon[])
     } catch (err) {
       console.error('Failed to fetch coupons:', err)
     }
@@ -253,24 +252,16 @@ export function RevenueView() {
   const saveRule = async () => {
     if (!currentHotelId || !ruleForm.name || !ruleForm.adjustmentValue) return
 
-    const url = editingRule
-      ? `/api/revenue/rules/${editingRule.id}?hotelId=${currentHotelId}`
-      : `/api/revenue/rules?hotelId=${currentHotelId}`
-    const method = editingRule ? 'PATCH' : 'POST'
-
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ruleForm),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = editingRule
+        ? await api.updateRevenueRule(editingRule.id, currentHotelId, ruleForm)
+        : await api.createRevenueRule(currentHotelId, ruleForm)
+      if (res.success) {
         toast.success(editingRule ? 'Rule updated' : 'Rule created')
         setShowRuleDialog(false)
         await fetchRules()
       } else {
-        toast.error(json.error || 'Failed to save rule')
+        toast.error(res.error || 'Failed to save rule')
       }
     } catch {
       toast.error('Failed to save rule')
@@ -280,11 +271,12 @@ export function RevenueView() {
   const deleteRule = async (id: string) => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/revenue/rules/${id}?hotelId=${currentHotelId}`, { method: 'DELETE' })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.deleteRevenueRule(id, currentHotelId)
+      if (res.success) {
         toast.success('Rule deleted')
         await fetchRules()
+      } else {
+        toast.error(res.error || 'Failed to delete rule')
       }
     } catch {
       toast.error('Failed to delete rule')
@@ -317,24 +309,16 @@ export function RevenueView() {
   const saveCoupon = async () => {
     if (!currentHotelId || !couponForm.code || !couponForm.value) return
 
-    const url = editingCoupon
-      ? `/api/coupons/${editingCoupon.id}?hotelId=${currentHotelId}`
-      : `/api/coupons?hotelId=${currentHotelId}`
-    const method = editingCoupon ? 'PATCH' : 'POST'
-
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(couponForm),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = editingCoupon
+        ? await api.updateCoupon(editingCoupon.id, currentHotelId, couponForm)
+        : await api.createCoupon(currentHotelId, couponForm)
+      if (res.success) {
         toast.success(editingCoupon ? 'Coupon updated' : 'Coupon created')
         setShowCouponDialog(false)
         await fetchCoupons()
       } else {
-        toast.error(json.error || 'Failed to save coupon')
+        toast.error(res.error || 'Failed to save coupon')
       }
     } catch {
       toast.error('Failed to save coupon')
@@ -344,11 +328,12 @@ export function RevenueView() {
   const deleteCoupon = async (id: string) => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/coupons/${id}?hotelId=${currentHotelId}`, { method: 'DELETE' })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.deleteCoupon(id, currentHotelId)
+      if (res.success) {
         toast.success('Coupon deleted')
         await fetchCoupons()
+      } else {
+        toast.error(res.error || 'Failed to delete coupon')
       }
     } catch {
       toast.error('Failed to delete coupon')
@@ -358,13 +343,8 @@ export function RevenueView() {
   const validateCoupon = async () => {
     if (!currentHotelId || !validateCode) return
     try {
-      const res = await fetch('/api/coupons/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hotelId: currentHotelId, code: validateCode }),
-      })
-      const json = await res.json()
-      if (json.success) setValidateResult(json.data)
+      const res = await api.validateCoupon(currentHotelId, validateCode)
+      if (res.success) setValidateResult(res.data as typeof validateResult)
     } catch {
       toast.error('Failed to validate coupon')
     }
@@ -376,10 +356,9 @@ export function RevenueView() {
     if (!currentHotelId || !calcRoomId || !calcDate) return
     setCalcLoading(true)
     try {
-      const res = await fetch(`/api/revenue/calculate?hotelId=${currentHotelId}&roomId=${calcRoomId}&date=${calcDate}`)
-      const json = await res.json()
-      if (json.success) setCalcResult(json.data)
-      else toast.error(json.error || 'Failed to calculate price')
+      const res = await api.calculatePrice(currentHotelId, calcRoomId, calcDate)
+      if (res.success) setCalcResult(res.data as PriceCalcResult)
+      else toast.error(res.error || 'Failed to calculate price')
     } catch {
       toast.error('Failed to calculate price')
     } finally {

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   CalendarDays,
   Users,
@@ -10,6 +10,11 @@ import {
   AlertCircle,
   Loader2,
   Search,
+  Tag,
+  X,
+  TrendingUp,
+  TrendingDown,
+  Info,
 } from 'lucide-react'
 import {
   Dialog,
@@ -35,9 +40,11 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
-import { format, differenceInDays, isAfter, isBefore } from 'date-fns'
+import { api, type PricingBreakdown, type CouponValidation, type NightlyPrice } from '@/lib/api'
+import { format, differenceInDays, isAfter, isBefore, addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { formatCurrency } from '@/lib/currency'
 
 export function NewBookingDialog() {
   const {
@@ -73,6 +80,16 @@ export function NewBookingDialog() {
   const [newGuestPhone, setNewGuestPhone] = useState('')
   const [creatingGuest, setCreatingGuest] = useState(false)
 
+  // Dynamic pricing state
+  const [pricingBreakdown, setPricingBreakdown] = useState<PricingBreakdown | null>(null)
+  const [loadingPricing, setLoadingPricing] = useState(false)
+
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('')
+  const [couponInput, setCouponInput] = useState('')
+  const [couponValidation, setCouponValidation] = useState<CouponValidation | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+
   // Set default channel to first walk-in channel
   useEffect(() => {
     if (channels.length > 0 && !channelId) {
@@ -92,6 +109,99 @@ export function NewBookingDialog() {
       return () => clearTimeout(timer)
     }
   }, [guestSearch, currentHotelId, fetchGuests, showNewGuestForm])
+
+  // Fetch dynamic pricing when room/dates/channel change
+  const fetchPricing = useCallback(async () => {
+    if (!currentHotelId || !selectedRoomId || !checkIn || !checkOut) {
+      setPricingBreakdown(null)
+      return
+    }
+    const nights = differenceInDays(checkOut, checkIn)
+    if (nights < 1) {
+      setPricingBreakdown(null)
+      return
+    }
+
+    setLoadingPricing(true)
+    try {
+      const nightlyPrices: NightlyPrice[] = []
+      let baseTotal = 0
+      let dynamicTotal = 0
+
+      for (let i = 0; i < nights; i++) {
+        const dateStr = format(addDays(checkIn, i), 'yyyy-MM-dd')
+        const result = await api.calculatePrice(
+          currentHotelId,
+          selectedRoomId,
+          dateStr,
+          channelId || undefined,
+        )
+        if (result.success) {
+          nightlyPrices.push({
+            date: dateStr,
+            basePrice: result.data.basePrice,
+            finalPrice: result.data.finalPrice,
+            appliedRules: result.data.appliedRules,
+          })
+          baseTotal += result.data.basePrice
+          dynamicTotal += result.data.finalPrice
+        } else {
+          // Fallback to base price
+          const room = rooms.find((r) => r.id === selectedRoomId)
+          const fallback = room?.basePrice || 0
+          nightlyPrices.push({
+            date: dateStr,
+            basePrice: fallback,
+            finalPrice: fallback,
+            appliedRules: [],
+          })
+          baseTotal += fallback
+          dynamicTotal += fallback
+        }
+      }
+
+      setPricingBreakdown({
+        nightlyPrices,
+        baseTotal: Math.round(baseTotal * 100) / 100,
+        adjustmentsTotal: Math.round((dynamicTotal - baseTotal) * 100) / 100,
+        dynamicTotal: Math.round(dynamicTotal * 100) / 100,
+        couponDiscount: 0,
+        couponCode: null,
+        couponType: null,
+        finalTotal: Math.round(dynamicTotal * 100) / 100,
+      })
+    } catch {
+      // Fallback to flat base price
+      const room = rooms.find((r) => r.id === selectedRoomId)
+      const fallback = room?.basePrice || 0
+      const flatTotal = fallback * nights
+      setPricingBreakdown({
+        nightlyPrices: Array.from({ length: nights }, (_, i) => ({
+          date: format(addDays(checkIn, i), 'yyyy-MM-dd'),
+          basePrice: fallback,
+          finalPrice: fallback,
+          appliedRules: [],
+        })),
+        baseTotal: flatTotal,
+        adjustmentsTotal: 0,
+        dynamicTotal: flatTotal,
+        couponDiscount: 0,
+        couponCode: null,
+        couponType: null,
+        finalTotal: flatTotal,
+      })
+    } finally {
+      setLoadingPricing(false)
+    }
+  }, [currentHotelId, selectedRoomId, checkIn, checkOut, channelId, rooms])
+
+  useEffect(() => {
+    if (step === 'dates' || step === 'confirm') {
+      fetchPricing()
+    } else {
+      setPricingBreakdown(null)
+    }
+  }, [step, fetchPricing])
 
   // Filter available rooms based on dates
   const availableRooms = useMemo(() => {
@@ -123,12 +233,39 @@ export function NewBookingDialog() {
   const selectedChannel = channels.find((c) => c.id === channelId)
 
   const nights = checkIn && checkOut ? differenceInDays(checkOut, checkIn) : 0
-  const totalPrice = selectedRoom
-    ? selectedRoom.basePrice * Math.max(nights, 1)
-    : 0
+  const currency = hotel?.currency || 'USD'
 
-  const currencySymbol =
-    hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+  // Computed final total with coupon
+  const finalTotalWithCoupon = useMemo(() => {
+    if (!pricingBreakdown) return 0
+    if (couponValidation?.valid && couponValidation.discount) {
+      return Math.max(0, pricingBreakdown.finalTotal - couponValidation.discount)
+    }
+    return pricingBreakdown.finalTotal
+  }, [pricingBreakdown, couponValidation])
+
+  // All applied rules across all nights
+  const allAppliedRules = useMemo(() => {
+    if (!pricingBreakdown) return []
+    const rulesMap = new Map<string, { name: string; ruleType: string; adjustmentType: string; adjustmentValue: number; count: number }>()
+    for (const night of pricingBreakdown.nightlyPrices) {
+      for (const rule of night.appliedRules) {
+        const existing = rulesMap.get(rule.id)
+        if (existing) {
+          existing.count++
+        } else {
+          rulesMap.set(rule.id, {
+            name: rule.name,
+            ruleType: rule.ruleType,
+            adjustmentType: rule.adjustmentType,
+            adjustmentValue: rule.adjustmentValue,
+            count: 1,
+          })
+        }
+      }
+    }
+    return Array.from(rulesMap.entries()).map(([, v]) => v)
+  }, [pricingBreakdown])
 
   const handleClose = () => {
     setShowNewBookingDialog(false)
@@ -151,6 +288,11 @@ export function NewBookingDialog() {
     setNewGuestEmail('')
     setNewGuestPhone('')
     setCreatingGuest(false)
+    setPricingBreakdown(null)
+    setCouponCode('')
+    setCouponInput('')
+    setCouponValidation(null)
+    setValidatingCoupon(false)
   }
 
   const handleCreateGuest = async () => {
@@ -188,6 +330,42 @@ export function NewBookingDialog() {
     }
   }
 
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim() || !currentHotelId) return
+
+    setValidatingCoupon(true)
+    try {
+      const result = await api.validateCoupon(currentHotelId, couponInput.trim(), {
+        numNights: nights,
+        channelId: channelId || undefined,
+      })
+      if (result.success) {
+        setCouponValidation(result.data)
+        if (result.data.valid) {
+          setCouponCode(couponInput.trim())
+          toast.success(`Coupon "${result.data.code}" applied! ${result.data.type === 'percentage' ? `${result.data.value}% off` : result.data.type === 'free_nights' ? `${result.data.value} free night(s)` : `${formatCurrency(result.data.discount, currency)} off`}`)
+        } else {
+          setCouponCode('')
+          toast.error(result.data.reason || 'Invalid coupon code')
+        }
+      } else {
+        setCouponValidation(null)
+        setCouponCode('')
+        toast.error(result.error || 'Failed to validate coupon')
+      }
+    } catch {
+      toast.error('Failed to validate coupon')
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('')
+    setCouponInput('')
+    setCouponValidation(null)
+  }
+
   const handleSubmit = async () => {
     if (!selectedGuestId || !selectedRoomId || !checkIn || !checkOut || nights < 1)
       return
@@ -202,6 +380,7 @@ export function NewBookingDialog() {
         checkOut: format(checkOut, 'yyyy-MM-dd'),
         numGuests,
         specialRequests: specialRequests || undefined,
+        couponCode: couponCode || undefined,
       })
 
       if (booking) {
@@ -488,8 +667,7 @@ export function NewBookingDialog() {
                           <span>Up to {room.maxGuests} guests</span>
                           <span>·</span>
                           <span className="font-medium">
-                            {currencySymbol}
-                            {room.basePrice}/night
+                            {formatCurrency(room.basePrice, currency)}/night
                           </span>
                         </div>
                       </div>
@@ -621,6 +799,106 @@ export function NewBookingDialog() {
                   rows={2}
                 />
               </div>
+
+              {/* Dynamic Pricing Breakdown */}
+              {loadingPricing && (
+                <div className="flex items-center gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Calculating dynamic pricing...
+                </div>
+              )}
+
+              {!loadingPricing && pricingBreakdown && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <DollarSign className="h-4 w-4 text-emerald-600" />
+                    Price Breakdown
+                  </div>
+
+                  {/* Nightly prices */}
+                  <div className="max-h-40 space-y-1 overflow-y-auto">
+                    {pricingBreakdown.nightlyPrices.map((night) => {
+                      const hasAdjustment = night.appliedRules.length > 0
+                      return (
+                        <div key={night.date} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {format(new Date(night.date + 'T12:00:00'), 'EEE, MMM d')}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {hasAdjustment && night.basePrice !== night.finalPrice && (
+                              <span className="text-muted-foreground line-through">
+                                {formatCurrency(night.basePrice, currency)}
+                              </span>
+                            )}
+                            <span className={cn(
+                              'font-medium',
+                              night.finalPrice < night.basePrice ? 'text-emerald-600' :
+                              night.finalPrice > night.basePrice ? 'text-red-600' : ''
+                            )}>
+                              {formatCurrency(night.finalPrice, currency)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Applied rules summary */}
+                  {allAppliedRules.length > 0 && (
+                    <div className="space-y-1">
+                      {allAppliedRules.map((rule) => (
+                        <div key={rule.ruleType + rule.name} className="flex items-center gap-1.5 text-xs">
+                          {rule.adjustmentType === 'percentage' ? (
+                            <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                          ) : (
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          )}
+                          <span className="text-muted-foreground">
+                            {rule.name}
+                            {rule.count > 1 && <span> (×{rule.count})</span>}
+                          </span>
+                          <span className={cn(
+                            'font-medium',
+                            rule.adjustmentValue > 0 ? 'text-red-600' :
+                            rule.adjustmentValue < 0 ? 'text-emerald-600' : ''
+                          )}>
+                            {rule.adjustmentValue > 0 ? '+' : ''}
+                            {rule.adjustmentType === 'percentage'
+                              ? `${rule.adjustmentValue}%`
+                              : formatCurrency(Math.abs(rule.adjustmentValue), currency)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Totals */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Base total</span>
+                      <span>{formatCurrency(pricingBreakdown.baseTotal, currency)}</span>
+                    </div>
+                    {pricingBreakdown.adjustmentsTotal !== 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Adjustments</span>
+                        <span className={cn(
+                          'font-medium',
+                          pricingBreakdown.adjustmentsTotal > 0 ? 'text-red-600' : 'text-emerald-600'
+                        )}>
+                          {pricingBreakdown.adjustmentsTotal > 0 ? '+' : ''}
+                          {formatCurrency(Math.abs(pricingBreakdown.adjustmentsTotal), currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-bold">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(pricingBreakdown.dynamicTotal, currency)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -675,25 +953,142 @@ export function NewBookingDialog() {
 
                 <Separator />
 
-                <div className="pt-1">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm text-muted-foreground">Total</span>
-                    <div className="text-right">
-                      <span className="text-xl font-bold">
-                        {currencySymbol}
-                        {totalPrice.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground ml-1">
-                        {hotel?.currency || 'USD'}
-                      </span>
+                {/* Full Pricing Breakdown */}
+                {pricingBreakdown && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-emerald-600" />
+                      Pricing Details
+                    </h4>
+
+                    {pricingBreakdown.baseTotal !== pricingBreakdown.dynamicTotal && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Base price ({nights} nights)</span>
+                          <span>{formatCurrency(pricingBreakdown.baseTotal, currency)}</span>
+                        </div>
+                        {allAppliedRules.map((rule) => (
+                          <div key={rule.ruleType + rule.name} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              {rule.adjustmentValue > 0 ? (
+                                <TrendingUp className="h-3 w-3 text-red-500" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3 text-emerald-500" />
+                              )}
+                              {rule.name}{rule.count > 1 ? ` (×${rule.count})` : ''}
+                            </span>
+                            <span className={cn(
+                              'font-medium',
+                              rule.adjustmentValue > 0 ? 'text-red-600' : 'text-emerald-600'
+                            )}>
+                              {rule.adjustmentValue > 0 ? '+' : '-'}
+                              {formatCurrency(Math.abs(rule.adjustmentValue * rule.count), currency)}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span>{formatCurrency(pricingBreakdown.dynamicTotal, currency)}</span>
+                        </div>
+                      </>
+                    )}
+
+                    {pricingBreakdown.baseTotal === pricingBreakdown.dynamicTotal && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {formatCurrency(selectedRoom?.basePrice || 0, currency)} × {nights} nights
+                        </span>
+                        <span>{formatCurrency(pricingBreakdown.dynamicTotal, currency)}</span>
+                      </div>
+                    )}
+
+                    {/* Coupon discount */}
+                    {couponValidation?.valid && couponValidation.discount ? (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-emerald-600 flex items-center gap-1.5">
+                          <Tag className="h-3 w-3" />
+                          Coupon &ldquo;{couponValidation.code}&rdquo;
+                          {couponValidation.type === 'percentage' && ` (${couponValidation.value}%)`}
+                          {couponValidation.type === 'free_nights' && ` (${couponValidation.value} free night${couponValidation.value > 1 ? 's' : ''})`}
+                        </span>
+                        <span className="font-medium text-emerald-600">
+                          -{formatCurrency(couponValidation.discount, currency)}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    <Separator />
+
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-muted-foreground">Total</span>
+                      <div className="text-right">
+                        <span className="text-xl font-bold">
+                          {formatCurrency(finalTotalWithCoupon, currency)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {currencySymbol}
-                    {selectedRoom?.basePrice} × {nights} night
-                    {nights !== 1 ? 's' : ''}
-                  </p>
-                </div>
+                )}
+              </div>
+
+              {/* Coupon Code Input */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Coupon Code
+                </Label>
+                {couponValidation?.valid ? (
+                  <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-600" />
+                      <div>
+                        <span className="text-sm font-medium text-emerald-700">
+                          {couponValidation.code}
+                        </span>
+                        <p className="text-xs text-emerald-600">
+                          {couponValidation.type === 'percentage' && `${couponValidation.value}% discount applied`}
+                          {couponValidation.type === 'fixed' && `${formatCurrency(couponValidation.discount, currency)} discount applied`}
+                          {couponValidation.type === 'free_nights' && `${couponValidation.value} free night(s) - ${formatCurrency(couponValidation.discount, currency)} off`}
+                          {couponValidation.remainingUses !== null && couponValidation.remainingUses !== undefined && (
+                            <span className="ml-1">({couponValidation.remainingUses} uses remaining)</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveCoupon}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter coupon code..."
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                      disabled={validatingCoupon}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleApplyCoupon}
+                      disabled={!couponInput.trim() || validatingCoupon}
+                    >
+                      {validatingCoupon ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+                )}
+                {couponValidation && !couponValidation.valid && (
+                  <p className="text-xs text-red-600">{couponValidation.reason}</p>
+                )}
               </div>
 
               {specialRequests && (

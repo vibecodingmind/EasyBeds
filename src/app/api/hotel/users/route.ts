@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       user = await db.user.create({
         data: {
           email,
-          passwordHash: hashPassword(defaultPassword),
+          passwordHash: await hashPassword(defaultPassword),
           name,
           emailVerified: true,
           role: 'user',

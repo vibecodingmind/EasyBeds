@@ -15,6 +15,8 @@ import {
   CalendarDays,
   BedDouble,
   CheckCircle2,
+  FileText,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -55,6 +57,7 @@ import { useAppStore, type BookingStatus, type ApiBooking } from '@/lib/store'
 import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { openPrintPreview } from '@/lib/pdf-utils'
 
 const statusColors: Record<string, string> = {
   confirmed: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -171,6 +174,41 @@ export function BookingsView() {
 
   const currencySymbol =
     hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+
+  // Invoice download handler
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null)
+
+  const handleDownloadInvoice = async (booking: ApiBooking) => {
+    if (!currentHotelId) return
+    setDownloadingInvoice(booking.id)
+    try {
+      // Step 1: Create invoice (returns existing if one exists)
+      const createRes = await fetch(`/api/invoices?hotelId=${currentHotelId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id, taxRate: 0 }),
+      })
+      const createJson = await createRes.json()
+      if (!createJson.success) {
+        toast.error(createJson.error || 'Failed to create invoice')
+        return
+      }
+      const invoiceId = createJson.data.id
+
+      // Step 2: Fetch printable HTML
+      const pdfRes = await fetch(`/api/invoices/${invoiceId}/pdf?hotelId=${currentHotelId}`)
+      if (!pdfRes.ok) {
+        toast.error('Failed to generate invoice')
+        return
+      }
+      const html = await pdfRes.text()
+      openPrintPreview(html, `Invoice ${createJson.data.invoiceNumber}`)
+    } catch {
+      toast.error('Failed to download invoice')
+    } finally {
+      setDownloadingInvoice(null)
+    }
+  }
 
   return (
     <motion.div
@@ -382,6 +420,20 @@ export function BookingsView() {
                                 Cancel
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDownloadInvoice(booking)
+                              }}
+                              disabled={downloadingInvoice === booking.id}
+                            >
+                              {downloadingInvoice === booking.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="mr-2 h-4 w-4" />
+                              )}
+                              Download Invoice
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -574,6 +626,19 @@ export function BookingsView() {
                       Modify
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => handleDownloadInvoice(selectedBooking)}
+                    disabled={downloadingInvoice === selectedBooking.id}
+                  >
+                    {downloadingInvoice === selectedBooking.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    Download Invoice
+                  </Button>
                 </div>
               </div>
             </>

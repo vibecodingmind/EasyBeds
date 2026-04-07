@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvoice, generateInvoiceHtml } from '@/lib/invoices';
 
-// GET /api/invoices/[id]/pdf?hotelId=xxx — Generate and serve PDF invoice as HTML
+// GET /api/invoices/[id]/pdf?hotelId=xxx — Generate and serve invoice as printable HTML
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -19,11 +19,13 @@ export async function GET(
     const invoice = await getInvoice(id, hotelId);
     const html = generateInvoiceHtml(invoice);
 
+    const safeNumber = invoice.invoiceNumber.replace(/[^a-zA-Z0-9\-]/g, '_');
+
     return new NextResponse(html, {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="${invoice.invoiceNumber}.html"`,
+        'Content-Disposition': `attachment; filename="${safeNumber}.html"`,
       },
     });
   } catch (error: unknown) {

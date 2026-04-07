@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { formatCurrency } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import {
@@ -126,9 +127,8 @@ export function AnalyticsView() {
   const fetchKpis = useCallback(async () => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/analytics/kpis?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setKpiData(json.data)
+      const res = await api.getAnalyticsKPIs(currentHotelId)
+      if (res.success) setKpiData(res.data as KpiData)
     } catch (err) {
       console.error('Failed to fetch KPIs:', err)
     }
@@ -137,9 +137,8 @@ export function AnalyticsView() {
   const fetchTrends = useCallback(async (period: string) => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/analytics/trends?hotelId=${currentHotelId}&period=${period}`)
-      const json = await res.json()
-      if (json.success) setTrendsData(json.data)
+      const res = await api.getAnalyticsTrends(currentHotelId, period)
+      if (res.success) setTrendsData(res.data as TrendsData)
     } catch (err) {
       console.error('Failed to fetch trends:', err)
     }
@@ -148,9 +147,8 @@ export function AnalyticsView() {
   const fetchChannels = useCallback(async () => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/analytics/channels?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setChannelData(json.data)
+      const res = await api.getAnalyticsChannels(currentHotelId)
+      if (res.success) setChannelData(res.data as ChannelData)
     } catch (err) {
       console.error('Failed to fetch channels:', err)
     }

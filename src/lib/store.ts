@@ -115,6 +115,7 @@ interface AppState {
 
   // ── Sync Actions (navigation / UI) ──
   setCurrentView: (view: ViewType) => void
+  navigate: (view: ViewType) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setCalendarDate: (date: Date) => void
@@ -142,8 +143,14 @@ interface AppState {
   createBooking: (data: CreateBookingInput) => Promise<ApiBooking | null>
   updateBookingStatus: (id: string, status: string) => Promise<boolean>
   createRoom: (data: CreateRoomInput) => Promise<ApiRoom | null>
+  updateRoom: (roomId: string, data: Partial<CreateRoomInput>) => Promise<ApiRoom | null>
+  deleteRoom: (roomId: string) => Promise<boolean>
   createGuest: (data: CreateGuestInput) => Promise<ApiGuest | null>
+  updateGuest: (guestId: string, data: Partial<CreateGuestInput>) => Promise<ApiGuest | null>
+  deleteGuest: (guestId: string) => Promise<boolean>
   createChannel: (data: CreateChannelInput) => Promise<ApiChannel | null>
+  updateChannel: (channelId: string, data: Partial<CreateChannelInput & { isActive: boolean }>) => Promise<ApiChannel | null>
+  deleteChannel: (channelId: string) => Promise<boolean>
 }
 
 // ─── Store Implementation ────────────────────────────────────────────────────
@@ -188,6 +195,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setCurrentView: (view) =>
     set({ currentView: view, selectedBookingId: null, selectedGuestId: null }),
+
+  navigate: (view) => {
+    // Update the URL hash (which will fire hashchange → setCurrentView via initRouter)
+    const hash = view === 'dashboard' ? '' : view === 'night_audit' ? 'night-audit' : view
+    window.location.hash = hash
+    // Also update state immediately for responsiveness (before hashchange fires)
+    set({ currentView: view, selectedBookingId: null, selectedGuestId: null })
+  },
 
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
@@ -493,6 +508,50 @@ export const useAppStore = create<AppState>((set, get) => ({
     return response.data
   },
 
+  updateRoom: async (roomId, data) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return null
+
+    const response = await api.updateRoom(roomId, hotelId, data)
+    if (!response.success) {
+      console.error('[store] updateRoom failed:', response.error)
+      return null
+    }
+
+    // Optimistically update the room in state
+    set((s) => ({
+      rooms: s.rooms.map((r) =>
+        r.id === roomId ? { ...r, ...response.data } : r,
+      ),
+    }))
+
+    // Refresh rooms list for consistency
+    await get().fetchRooms()
+
+    return response.data
+  },
+
+  deleteRoom: async (roomId) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return false
+
+    const response = await api.deleteRoom(roomId, hotelId)
+    if (!response.success) {
+      console.error('[store] deleteRoom failed:', response.error)
+      return false
+    }
+
+    // Remove from local state (soft delete)
+    set((s) => ({
+      rooms: s.rooms.filter((r) => r.id !== roomId),
+    }))
+
+    // Refresh rooms list for consistency
+    await get().fetchRooms()
+
+    return true
+  },
+
   createGuest: async (data) => {
     const hotelId = get().currentHotelId
     if (!hotelId) return null
@@ -509,6 +568,48 @@ export const useAppStore = create<AppState>((set, get) => ({
     return response.data
   },
 
+  updateGuest: async (guestId, data) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return null
+
+    const response = await api.updateGuest(guestId, hotelId, data)
+    if (!response.success) {
+      console.error('[store] updateGuest failed:', response.error)
+      return null
+    }
+
+    // Optimistically update the guest in local state
+    set((s) => ({
+      guests: s.guests.map((g) =>
+        g.id === guestId ? { ...g, ...response.data } : g,
+      ),
+    }))
+
+    return response.data
+  },
+
+  deleteGuest: async (guestId) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return false
+
+    const response = await api.deleteGuest(guestId, hotelId)
+    if (!response.success) {
+      console.error('[store] deleteGuest failed:', response.error)
+      return false
+    }
+
+    // Remove from local state and clear selection if this guest was selected
+    set((s) => ({
+      guests: s.guests.filter((g) => g.id !== guestId),
+      selectedGuestId: s.selectedGuestId === guestId ? null : s.selectedGuestId,
+    }))
+
+    // Refresh guests list to sync pagination
+    await get().fetchGuests()
+
+    return true
+  },
+
   createChannel: async (data) => {
     const hotelId = get().currentHotelId
     if (!hotelId) return null
@@ -523,5 +624,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().fetchChannels()
 
     return response.data
+  },
+
+  updateChannel: async (channelId, data) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return null
+
+    const response = await api.updateChannel(channelId, hotelId, data)
+    if (!response.success) {
+      console.error('[store] updateChannel failed:', response.error)
+      return null
+    }
+
+    // Optimistically update the channel in local state
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, ...response.data } : c,
+      ),
+    }))
+
+    // Refresh channels list for consistency
+    await get().fetchChannels()
+
+    return response.data
+  },
+
+  deleteChannel: async (channelId) => {
+    const hotelId = get().currentHotelId
+    if (!hotelId) return false
+
+    const response = await api.deleteChannel(channelId, hotelId)
+    if (!response.success) {
+      console.error('[store] deleteChannel failed:', response.error)
+      return false
+    }
+
+    // Remove from local state
+    set((s) => ({
+      channels: s.channels.filter((c) => c.id !== channelId),
+    }))
+
+    // Refresh channels list for consistency
+    await get().fetchChannels()
+
+    return true
   },
 }))

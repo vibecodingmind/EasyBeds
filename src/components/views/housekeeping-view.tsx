@@ -47,6 +47,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { format, parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -117,12 +118,9 @@ export function HousekeepingView() {
     setLoading(true)
     try {
       const today = format(new Date(), 'yyyy-MM-dd')
-      const res = await fetch(
-        `/api/housekeeping?hotelId=${currentHotelId}&date=${today}`
-      )
-      const json = await res.json()
-      if (json.success) {
-        setTasks(json.data)
+      const res = await api.getHousekeepingTasks(currentHotelId, today)
+      if (res.success) {
+        setTasks(res.data as HousekeepingTask[])
       }
     } catch {
       toast.error('Failed to fetch tasks')
@@ -139,19 +137,15 @@ export function HousekeepingView() {
     if (!currentHotelId) return
     setGenerating(true)
     try {
-      const res = await fetch(`/api/housekeeping/bulk?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: format(new Date(), 'yyyy-MM-dd') }),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.bulkGenerateHousekeepingTasks(currentHotelId, { date: format(new Date(), 'yyyy-MM-dd') })
+      if (res.success) {
+        const data = res.data as { createdCount: number }
         toast.success(
-          `Generated ${json.data.createdCount} task${json.data.createdCount !== 1 ? 's' : ''}`
+          `Generated ${data.createdCount} task${data.createdCount !== 1 ? 's' : ''}`
         )
         fetchTasks()
       } else {
-        toast.error(json.error || 'Failed to generate tasks')
+        toast.error(res.error || 'Failed to generate tasks')
       }
     } catch {
       toast.error('Failed to generate tasks')
@@ -166,13 +160,8 @@ export function HousekeepingView() {
       return
     }
     try {
-      const res = await fetch(`/api/housekeeping?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTask),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.createHousekeepingTask(currentHotelId, newTask)
+      if (res.success) {
         toast.success('Task created')
         setShowCreateDialog(false)
         setNewTask({
@@ -186,7 +175,7 @@ export function HousekeepingView() {
         })
         fetchTasks()
       } else {
-        toast.error(json.error || 'Failed to create task')
+        toast.error(res.error || 'Failed to create task')
       }
     } catch {
       toast.error('Failed to create task')
@@ -196,24 +185,14 @@ export function HousekeepingView() {
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(
-        `/api/housekeeping/${taskId}?hotelId=${currentHotelId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus }),
-        }
-      )
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.updateHousekeepingTask(taskId, currentHotelId, { status: newStatus })
+      if (res.success) {
         setTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? json.data : t))
+          prev.map((t) => (t.id === taskId ? res.data as HousekeepingTask : t))
         )
-        toast.success(
-          `Task moved to ${newStatus.replace(/_/g, ' ')}`
-        )
+        toast.success(`Task moved to ${newStatus.replace(/_/g, ' ')}`)
       } else {
-        toast.error(json.error || 'Failed to update task')
+        toast.error(res.error || 'Failed to update task')
       }
     } catch {
       toast.error('Failed to update task')
@@ -223,18 +202,10 @@ export function HousekeepingView() {
   const handleAddNotes = async () => {
     if (!currentHotelId || !selectedTask) return
     try {
-      const res = await fetch(
-        `/api/housekeeping/${selectedTask.id}?hotelId=${currentHotelId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: taskNotes }),
-        }
-      )
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.updateHousekeepingTask(selectedTask.id, currentHotelId, { notes: taskNotes })
+      if (res.success) {
         setTasks((prev) =>
-          prev.map((t) => (t.id === selectedTask.id ? json.data : t))
+          prev.map((t) => (t.id === selectedTask.id ? res.data as HousekeepingTask : t))
         )
         toast.success('Notes updated')
         setShowNotesDialog(false)

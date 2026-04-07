@@ -84,7 +84,7 @@ export function AppSidebar() {
     hotel,
     currentView,
     sidebarOpen,
-    setCurrentView,
+    navigate,
     logout,
     toggleSidebar,
   } = useAppStore()
@@ -169,7 +169,7 @@ export function AppSidebar() {
                               variant={isActive ? 'secondary' : 'ghost'}
                               size="icon"
                               className="w-full"
-                              onClick={() => setCurrentView(item.view)}
+                              onClick={() => navigate(item.view)}
                             >
                               <Icon className="h-4 w-4" />
                             </Button>
@@ -190,7 +190,7 @@ export function AppSidebar() {
                           isActive &&
                             'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
                         )}
-                        onClick={() => setCurrentView(item.view)}
+                        onClick={() => navigate(item.view)}
                       >
                         <Icon className="h-4 w-4 shrink-0" />
                         <span className="text-sm">{item.label}</span>
@@ -220,7 +220,7 @@ export function AppSidebar() {
                         variant={isActive ? 'secondary' : 'ghost'}
                         size="icon"
                         className="w-full"
-                        onClick={() => setCurrentView('settings')}
+                        onClick={() => navigate('settings')}
                       >
                         <Icon className="h-4 w-4" />
                       </Button>
@@ -239,7 +239,7 @@ export function AppSidebar() {
                     isActive &&
                       'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
                   )}
-                  onClick={() => setCurrentView('settings')}
+                  onClick={() => navigate('settings')}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="text-sm">Settings</span>

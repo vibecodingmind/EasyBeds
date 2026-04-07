@@ -42,8 +42,14 @@ import {
   Wifi,
   Loader2,
   AlertCircle,
+  Tag,
+  X,
+  Check,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/currency'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +85,43 @@ interface RoomData {
   numNights?: number
   totalPrice?: number
   available?: boolean
+}
+
+interface AppliedRule {
+  id: string
+  name: string
+  ruleType: string
+  adjustmentType: string
+  adjustmentValue: number
+  priceBefore: number
+  priceAfter: number
+}
+
+interface NightlyPrice {
+  date: string
+  basePrice: number
+  finalPrice: number
+  appliedRules: AppliedRule[]
+}
+
+interface PricingResponse {
+  nightlyPrices: NightlyPrice[]
+  baseTotal: number
+  adjustmentsTotal: number
+  dynamicTotal: number
+  currency: string
+}
+
+interface CouponResponse {
+  valid: boolean
+  reason?: string
+  couponId?: string
+  code?: string
+  type?: string
+  value?: number
+  discount?: number
+  remainingUses?: number | null
+  minStay?: number
 }
 
 interface BookingResult {
@@ -149,6 +192,17 @@ export default function BookingPage() {
   const [phone, setPhone] = useState('')
   const [specialRequests, setSpecialRequests] = useState('')
 
+  // Dynamic pricing state
+  const [pricing, setPricing] = useState<PricingResponse | null>(null)
+  const [loadingPricing, setLoadingPricing] = useState(false)
+  const [roomPricingMap, setRoomPricingMap] = useState<Record<string, { dynamicTotal: number; baseTotal: number }>>({})
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('')
+  const [couponResult, setCouponResult] = useState<CouponResponse | null>(null)
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+
   // Load hotel data based on URL slug
   useEffect(() => {
     const path = window.location.pathname
@@ -190,10 +244,119 @@ export default function BookingPage() {
     return differenceInCalendarDays(checkOut, checkIn)
   }, [checkIn, checkOut])
 
-  const totalPrice = useMemo(() => {
-    if (!selectedRoom || numNights <= 0) return 0
-    return numNights * selectedRoom.basePrice
-  }, [selectedRoom, numNights])
+  // Fetch dynamic pricing for room list
+  const fetchRoomPricing = useCallback(async () => {
+    if (!slug || !checkIn || !checkOut || availableRooms.length === 0) {
+      setRoomPricingMap({})
+      return
+    }
+
+    setLoadingPricing(true)
+    const map: Record<string, { dynamicTotal: number; baseTotal: number }> = {}
+
+    try {
+      const results = await Promise.allSettled(
+        availableRooms.map(async (room) => {
+          const params = new URLSearchParams({
+            roomId: room.id,
+            checkIn: format(checkIn!, 'yyyy-MM-dd'),
+            checkOut: format(checkOut!, 'yyyy-MM-dd'),
+          })
+          const res = await fetch(`/api/public/hotel/${encodeURIComponent(slug!)}/calculate-price?${params}`)
+          const json = await res.json()
+          if (json.success && json.data) {
+            return { roomId: room.id, dynamicTotal: json.data.dynamicTotal, baseTotal: json.data.baseTotal }
+          }
+          return { roomId: room.id, dynamicTotal: room.basePrice * numNights, baseTotal: room.basePrice * numNights }
+        })
+      )
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          map[r.value.roomId] = { dynamicTotal: r.value.dynamicTotal, baseTotal: r.value.baseTotal }
+        }
+      }
+    } catch {
+      // Fallback: use base prices
+      for (const room of availableRooms) {
+        map[room.id] = { dynamicTotal: room.basePrice * numNights, baseTotal: room.basePrice * numNights }
+      }
+    } finally {
+      setRoomPricingMap(map)
+      setLoadingPricing(false)
+    }
+  }, [slug, checkIn, checkOut, availableRooms, numNights])
+
+  useEffect(() => {
+    if (step === 'room' && availableRooms.length > 0) {
+      fetchRoomPricing()
+    }
+  }, [step, availableRooms, fetchRoomPricing])
+
+  // Fetch detailed pricing when a room is selected
+  const fetchSelectedRoomPricing = useCallback(async () => {
+    if (!slug || !selectedRoom || !checkIn || !checkOut) {
+      setPricing(null)
+      return
+    }
+
+    setLoadingPricing(true)
+    try {
+      const params = new URLSearchParams({
+        roomId: selectedRoom.id,
+        checkIn: format(checkIn!, 'yyyy-MM-dd'),
+        checkOut: format(checkOut!, 'yyyy-MM-dd'),
+      })
+      const res = await fetch(`/api/public/hotel/${encodeURIComponent(slug!)}/calculate-price?${params}`)
+      const json = await res.json()
+      if (json.success && json.data) {
+        setPricing(json.data)
+      } else {
+        setPricing(null)
+      }
+    } catch {
+      setPricing(null)
+    } finally {
+      setLoadingPricing(false)
+    }
+  }, [slug, selectedRoom, checkIn, checkOut])
+
+  useEffect(() => {
+    if (step === 'guest' || step === 'confirm') {
+      fetchSelectedRoomPricing()
+    }
+  }, [step, fetchSelectedRoomPricing])
+
+  // Computed total with coupon
+  const finalTotal = useMemo(() => {
+    if (!pricing) return 0
+    if (appliedCoupon && couponResult?.valid && couponResult.discount) {
+      return Math.max(0, pricing.dynamicTotal - couponResult.discount)
+    }
+    return pricing.dynamicTotal
+  }, [pricing, appliedCoupon, couponResult])
+
+  // All unique applied rules
+  const allRules = useMemo(() => {
+    if (!pricing) return []
+    const rulesMap = new Map<string, { name: string; adjustmentType: string; adjustmentValue: number; count: number }>()
+    for (const night of pricing.nightlyPrices) {
+      for (const rule of night.appliedRules) {
+        const existing = rulesMap.get(rule.id)
+        if (existing) {
+          existing.count++
+        } else {
+          rulesMap.set(rule.id, {
+            name: rule.name,
+            adjustmentType: rule.adjustmentType,
+            adjustmentValue: rule.adjustmentValue,
+            count: 1,
+          })
+        }
+      }
+    }
+    return Array.from(rulesMap.entries()).map(([, v]) => v)
+  }, [pricing])
 
   const checkAvailability = useCallback(async () => {
     if (!slug || !checkIn || !checkOut) return
@@ -241,6 +404,48 @@ export default function BookingPage() {
     setStep('guest')
   }
 
+  const handleApplyCoupon = async () => {
+    if (!slug || !couponInput.trim() || !pricing) return
+
+    setValidatingCoupon(true)
+    try {
+      const res = await fetch(`/api/public/hotel/${encodeURIComponent(slug)}/validate-coupon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponInput.trim(),
+          totalAmount: pricing.dynamicTotal,
+          numNights,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setCouponResult(json.data)
+        if (json.data.valid) {
+          setAppliedCoupon(couponInput.trim())
+        } else {
+          setAppliedCoupon(null)
+          setError(json.data.reason || 'Invalid coupon code')
+        }
+      } else {
+        setCouponResult(null)
+        setAppliedCoupon(null)
+      }
+    } catch {
+      setCouponResult(null)
+      setAppliedCoupon(null)
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setCouponInput('')
+    setCouponResult(null)
+    setAppliedCoupon(null)
+    setError(null)
+  }
+
   const handleSubmit = async () => {
     if (!slug || !selectedRoom || !checkIn || !checkOut) return
     if (!firstName.trim() || !lastName.trim()) {
@@ -269,6 +474,7 @@ export default function BookingPage() {
           guestEmail: email.trim() || undefined,
           guestPhone: phone.trim() || undefined,
           specialRequests: specialRequests.trim() || undefined,
+          couponCode: appliedCoupon || undefined,
         }),
       })
 
@@ -300,6 +506,11 @@ export default function BookingPage() {
     setSpecialRequests('')
     setError(null)
     setSuccess(null)
+    setPricing(null)
+    setRoomPricingMap({})
+    setCouponInput('')
+    setCouponResult(null)
+    setAppliedCoupon(null)
   }
 
   // ─── Loading State ─────────────────────────────────────────────────────────
@@ -330,6 +541,8 @@ export default function BookingPage() {
   }
 
   if (!hotel) return null
+
+  const cur = hotel.currency
 
   // ─── Success / Confirmation Screen ─────────────────────────────────────────
 
@@ -396,7 +609,7 @@ export default function BookingPage() {
                 <div>
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Total</p>
                   <p className="mt-1 text-lg font-bold text-emerald-600">
-                    {b.currency} {b.totalPrice.toLocaleString()}
+                    {formatCurrency(b.totalPrice, b.currency)}
                   </p>
                 </div>
               </div>
@@ -490,7 +703,7 @@ export default function BookingPage() {
           {/* Main Form */}
           <div className="space-y-6">
             {/* Error */}
-            {error && (
+            {error && step !== 'confirm' && (
               <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
                 <AlertCircle className="size-5 shrink-0" />
                 <p className="text-sm">{error}</p>
@@ -599,6 +812,12 @@ export default function BookingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {loadingPricing && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Loading dynamic prices...
+                    </div>
+                  )}
                   {availableRooms.length === 0 ? (
                     <p className="py-8 text-center text-muted-foreground">
                       No rooms available for these dates.
@@ -606,7 +825,11 @@ export default function BookingPage() {
                   ) : (
                     availableRooms.map((room) => {
                       const amenities = parseAmenities(room.amenities)
-                      const price = room.basePrice * numNights
+                      const rp = roomPricingMap[room.id]
+                      const dynTotal = rp?.dynamicTotal ?? room.basePrice * numNights
+                      const baseTotal = rp?.baseTotal ?? room.basePrice * numNights
+                      const hasDynamic = rp && Math.abs(dynTotal - baseTotal) > 0.01
+
                       return (
                         <button
                           key={room.id}
@@ -649,12 +872,28 @@ export default function BookingPage() {
                             </div>
                             <div className="text-right">
                               <p className="text-xs text-muted-foreground">per night</p>
+                              {hasDynamic && (
+                                <p className="text-sm text-muted-foreground line-through">
+                                  {formatCurrency(room.basePrice, cur)}
+                                </p>
+                              )}
                               <p className="text-lg font-bold text-emerald-600">
-                                {hotel.currency} {room.basePrice.toLocaleString()}
+                                {formatCurrency(numNights > 0 ? dynTotal / numNights : room.basePrice, cur)}
+                                <span className="text-xs font-normal text-muted-foreground"> /night</span>
                               </p>
                               <p className="text-sm font-medium text-muted-foreground">
-                                Total: {hotel.currency} {price.toLocaleString()}
+                                Total: {formatCurrency(dynTotal, cur)}
                               </p>
+                              {hasDynamic && dynTotal < baseTotal && (
+                                <p className="text-xs text-emerald-600">
+                                  Dynamic pricing applied
+                                </p>
+                              )}
+                              {hasDynamic && dynTotal > baseTotal && (
+                                <p className="text-xs text-red-600">
+                                  Peak pricing
+                                </p>
+                              )}
                             </div>
                           </div>
                         </button>
@@ -761,6 +1000,64 @@ export default function BookingPage() {
                       rows={3}
                     />
                   </div>
+
+                  {/* Coupon Code Section */}
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <Label className="flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Have a coupon code?
+                    </Label>
+                    {appliedCoupon && couponResult?.valid ? (
+                      <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-emerald-600" />
+                          <div>
+                            <span className="text-sm font-medium text-emerald-700">{couponResult.code}</span>
+                            <p className="text-xs text-emerald-600">
+                              {couponResult.type === 'percentage' && `${couponResult.value}% discount`}
+                              {couponResult.type === 'fixed' && `${formatCurrency(couponResult.discount, cur)} off`}
+                              {couponResult.type === 'free_nights' && `${couponResult.value} free night(s)`}
+                              {couponResult.remainingUses !== null && couponResult.remainingUses !== undefined && (
+                                <span className="ml-1">({couponResult.remainingUses} remaining)</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemoveCoupon}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Enter coupon code..."
+                          value={couponInput}
+                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                          disabled={validatingCoupon}
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={handleApplyCoupon}
+                          disabled={!couponInput.trim() || validatingCoupon}
+                        >
+                          {validatingCoupon ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Apply'
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                    {couponResult && !couponResult.valid && (
+                      <p className="text-xs text-red-600">{couponResult.reason}</p>
+                    )}
+                  </div>
                 </CardContent>
                 <CardFooter className="flex gap-3">
                   <Button variant="outline" onClick={() => setStep('room')}>
@@ -833,23 +1130,91 @@ export default function BookingPage() {
                         <BedDouble className="size-4 text-muted-foreground" />
                         <p className="font-medium">{selectedRoom.name}</p>
                       </div>
-                      <div className="mt-3 space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            {selectedRoom.basePrice.toLocaleString()} × {numNights} night(s)
-                          </span>
-                          <span className="font-medium">
-                            {hotel.currency} {totalPrice.toLocaleString()}
-                          </span>
+
+                      {/* Dynamic pricing breakdown in sidebar */}
+                      {loadingPricing ? (
+                        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Calculating...
                         </div>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Total</span>
-                      <span className="text-emerald-600">
-                        {hotel.currency} {totalPrice.toLocaleString()}
-                      </span>
+                      ) : pricing ? (
+                        <div className="mt-3 space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              {formatCurrency(pricing.baseTotal / numNights, cur)} × {numNights} night(s)
+                            </span>
+                            <span className="font-medium">
+                              {formatCurrency(pricing.baseTotal, cur)}
+                            </span>
+                          </div>
+
+                          {/* Applied rules */}
+                          {allRules.map((rule) => {
+                            const totalAdj = Math.abs(rule.adjustmentValue * rule.count)
+                            return (
+                              <div key={rule.name} className="flex justify-between">
+                                <span className={cn(
+                                  'flex items-center gap-1',
+                                  rule.adjustmentValue > 0 ? 'text-red-600' : 'text-emerald-600'
+                                )}>
+                                  {rule.adjustmentValue > 0 ? (
+                                    <TrendingUp className="size-3" />
+                                  ) : (
+                                    <TrendingDown className="size-3" />
+                                  )}
+                                  {rule.name}{rule.count > 1 ? ` (×${rule.count})` : ''}
+                                </span>
+                                <span className={cn(
+                                  'font-medium',
+                                  rule.adjustmentValue > 0 ? 'text-red-600' : 'text-emerald-600'
+                                )}>
+                                  {rule.adjustmentValue > 0 ? '+' : '-'}
+                                  {formatCurrency(totalAdj, cur)}
+                                </span>
+                              </div>
+                            )
+                          })}
+
+                          {/* Coupon discount */}
+                          {appliedCoupon && couponResult?.valid && couponResult.discount ? (
+                            <div className="flex justify-between">
+                              <span className="text-emerald-600 flex items-center gap-1">
+                                <Tag className="size-3" />
+                                Coupon &ldquo;{couponResult.code}&rdquo;
+                              </span>
+                              <span className="font-medium text-emerald-600">
+                                -{formatCurrency(couponResult.discount, cur)}
+                              </span>
+                            </div>
+                          ) : null}
+
+                          <Separator />
+                          <div className="flex justify-between text-lg font-bold">
+                            <span>Total</span>
+                            <span className="text-emerald-600">
+                              {formatCurrency(finalTotal, cur)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              {selectedRoom.basePrice.toLocaleString()} × {numNights} night(s)
+                            </span>
+                            <span className="font-medium">
+                              {formatCurrency(selectedRoom.basePrice * numNights, cur)}
+                            </span>
+                          </div>
+                          <Separator />
+                          <div className="flex justify-between text-lg font-bold">
+                            <span>Total</span>
+                            <span className="text-emerald-600">
+                              {formatCurrency(selectedRoom.basePrice * numNights, cur)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

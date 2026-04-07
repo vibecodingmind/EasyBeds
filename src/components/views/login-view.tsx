@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Hotel, Eye, EyeOff } from 'lucide-react'
+import { Hotel, Eye, EyeOff, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,13 +23,17 @@ export function LoginView() {
   const [password, setPassword] = useState('owner123')
   const [showPassword, setShowPassword] = useState(false)
   const [showSignup, setShowSignup] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [signupData, setSignupData] = useState({
     name: '',
     email: '',
     password: '',
     hotelName: '',
   })
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSent, setForgotSent] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -75,8 +79,9 @@ export function LoginView() {
         hotelSlug,
       })
       if (success) {
-        toast.success('Account created successfully!')
+        toast.success('Account created! Please check your email to verify your account.')
         setShowSignup(false)
+        setSignupData({ name: '', email: '', password: '', hotelName: '' })
       } else {
         toast.error('Registration failed. Please try again.')
       }
@@ -85,6 +90,37 @@ export function LoginView() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) {
+      toast.error('Please enter your email address')
+      return
+    }
+    setForgotLoading(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      })
+      const data = await res.json()
+
+      // Always show success message (security best practice)
+      setForgotSent(true)
+      toast.success('Check your email for reset instructions')
+    } catch {
+      // Even on error, show success to prevent email enumeration
+      setForgotSent(true)
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const resetForgotDialog = () => {
+    setShowForgotPassword(false)
+    setForgotEmail('')
+    setForgotSent(false)
   }
 
   return (
@@ -175,6 +211,11 @@ export function LoginView() {
                 <button
                   className="text-xs text-emerald-600 hover:text-emerald-700"
                   type="button"
+                  onClick={() => {
+                    setForgotEmail(email)
+                    setForgotSent(false)
+                    setShowForgotPassword(true)
+                  }}
                 >
                   Forgot password?
                 </button>
@@ -320,6 +361,95 @@ export function LoginView() {
                   {loading ? 'Creating...' : 'Create Account'}
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Forgot Password Dialog */}
+          <Dialog open={showForgotPassword} onOpenChange={(open) => {
+            if (!open) resetForgotDialog()
+            else setShowForgotPassword(open)
+          }}>
+            <DialogContent className="sm:max-w-md">
+              {!forgotSent ? (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Reset your password</DialogTitle>
+                    <DialogDescription>
+                      Enter your email address and we&apos;ll send you a link to reset your password.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="forgot-email">Email address</Label>
+                      <Input
+                        id="forgot-email"
+                        type="email"
+                        placeholder="you@hotel.com"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={resetForgotDialog}
+                    >
+                      Back to login
+                    </Button>
+                    <Button
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={handleForgotPassword}
+                      disabled={forgotLoading || !forgotEmail}
+                    >
+                      {forgotLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          Sending...
+                        </span>
+                      ) : (
+                        <>
+                          <Mail className="mr-2 h-4 w-4" />
+                          Send Reset Link
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Check your email</DialogTitle>
+                    <DialogDescription>
+                      {/* empty description for layout */}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+                    </div>
+                    <h3 className="mb-2 text-lg font-semibold">Reset link sent!</h3>
+                    <p className="max-w-xs text-sm text-muted-foreground">
+                      If an account exists with <strong className="text-foreground">{forgotEmail}</strong>, you will receive a password reset link shortly.
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Don&apos;t forget to check your spam folder.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={resetForgotDialog}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back to login
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
             </DialogContent>
           </Dialog>
 

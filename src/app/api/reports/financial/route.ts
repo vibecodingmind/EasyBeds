@@ -111,99 +111,131 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    const html = `
-<!DOCTYPE html>
-<html>
+    const hotelAddress = [hotel.address, hotel.city, hotel.country].filter(Boolean).join(', ');
+    const generatedAt = new Date().toLocaleString();
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Financial Report - ${format(from, 'MMM d')} to ${format(to, 'MMM d, yyyy')}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
-    @media print { body { padding: 0; } }
-    h1 { font-size: 22px; margin-bottom: 4px; }
-    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
-    .metric { background: #f8f9fa; border-radius: 8px; padding: 16px; text-align: center; }
-    .metric .value { font-size: 22px; font-weight: 700; }
-    .metric .label { font-size: 12px; color: #666; margin-top: 4px; }
-    h2 { font-size: 16px; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #10B981; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
-    th { background: #f1f5f9; text-align: left; padding: 8px 10px; font-weight: 600; font-size: 12px; }
-    td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: A4; margin: 15mm 12mm; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 13px; line-height: 1.55; color: #18181b; background: #fff;
+    }
+    .page { max-width: 210mm; margin: 0 auto; }
+
+    .doc-header { padding: 0 0 16px; border-bottom: 2px solid #10b981; margin-bottom: 24px; }
+    .doc-header h1 { font-size: 20px; font-weight: 700; color: #18181b; margin-bottom: 2px; }
+    .doc-header .subtitle { font-size: 13px; color: #52525b; margin-top: 2px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+    .kpi-card { background: #f9fafb; border: 1px solid #e4e4e7; border-radius: 8px; padding: 14px; text-align: center; }
+    .kpi-card .value { font-size: 20px; font-weight: 700; color: #18181b; }
+    .kpi-card .label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+    .section-title { font-size: 14px; font-weight: 700; color: #18181b; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #10b981; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+    thead th { background: #f4f4f5; text-align: left; padding: 8px 10px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #52525b; border-bottom: 2px solid #e4e4e7; }
+    tbody td { padding: 8px 10px; border-bottom: 1px solid #f4f4f5; color: #27272a; }
+    tbody tr:last-child td { border-bottom: none; }
     .text-right { text-align: right; }
-    .total-row td { font-weight: 700; border-top: 2px solid #ddd; }
-    .negative { color: #ef4444; }
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
+    .total-row td { font-weight: 700; border-top: 2px solid #d4d4d8; background: #fafafa; }
+    .negative { color: #dc2626; }
+
+    .metrics-table td { padding: 10px 14px; border-bottom: 1px solid #f4f4f5; }
+    .metrics-table td:first-child { font-weight: 500; }
+
+    .doc-footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e4e4e7; font-size: 11px; color: #a1a1aa; text-align: center; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .page { max-width: none; }
+      .doc-header, .section-title, .kpi-grid, table { page-break-inside: avoid; }
+    }
+    @media screen and (max-width: 640px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      body { padding: 0 12px; }
+    }
   </style>
 </head>
 <body>
-  <h1>${hotel.name}</h1>
-  <p class="subtitle">Financial Report — ${format(from, 'MMM d, yyyy')} to ${format(to, 'MMM d, yyyy')}</p>
+  <div class="page">
+    <div class="doc-header">
+      <h1>${hotel.name}</h1>
+      <div class="subtitle">Financial Report &mdash; ${format(from, 'MMM d, yyyy')} to ${format(to, 'MMM d, yyyy')}</div>
+    </div>
 
-  <div class="grid">
-    <div class="metric">
-      <div class="value">${fmt(totalRevenue)}</div>
-      <div class="label">Gross Revenue</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="value">${fmt(totalRevenue)}</div>
+        <div class="label">Gross Revenue</div>
+      </div>
+      <div class="kpi-card">
+        <div class="value">${fmt(netRevenue)}</div>
+        <div class="label">Net Revenue</div>
+      </div>
+      <div class="kpi-card">
+        <div class="value">${fmt(totalCollected)}</div>
+        <div class="label">Collected</div>
+      </div>
     </div>
-    <div class="metric">
-      <div class="value">${fmt(netRevenue)}</div>
-      <div class="label">Net Revenue</div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="value">${fmt(totalCommission)}</div>
+        <div class="label">Commissions</div>
+      </div>
+      <div class="kpi-card">
+        <div class="value${outstanding > 0 ? ' negative' : ''}">${fmt(outstanding)}</div>
+        <div class="label">Outstanding</div>
+      </div>
+      <div class="kpi-card">
+        <div class="value${totalRefunds > 0 ? ' negative' : ''}">${fmt(totalRefunds)}</div>
+        <div class="label">Refunds</div>
+      </div>
     </div>
-    <div class="metric">
-      <div class="value">${fmt(totalCollected)}</div>
-      <div class="label">Collected</div>
+
+    <div class="section-title">Commission Breakdown</div>
+    <table>
+      <thead><tr><th>Channel</th><th class="text-right">Commission</th></tr></thead>
+      <tbody>
+        ${Object.entries(commissionDetails).sort((a, b) => b[1] - a[1]).map(([ch, comm]) =>
+          `<tr><td>${ch}</td><td class="text-right">${fmt(comm)}</td></tr>`
+        ).join('')}
+        <tr class="total-row"><td>Total Commission</td><td class="text-right">${fmt(totalCommission)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-title">Payments by Method</div>
+    <table>
+      <thead><tr><th>Method</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr></thead>
+      <tbody>
+        ${Object.entries(paymentByMethod).sort((a, b) => b[1].total - a[1].total).map(([method, data]) =>
+          `<tr><td>${method.charAt(0).toUpperCase() + method.slice(1)}</td><td class="text-right">${data.count}</td><td class="text-right">${fmt(data.total)}</td></tr>`
+        ).join('')}
+        <tr class="total-row"><td>Total</td><td class="text-right">${payments.length}</td><td class="text-right">${fmt(totalCollected)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-title">Key Metrics</div>
+    <table class="metrics-table">
+      <tr><td>Total Bookings</td><td class="text-right">${activeBookings.length}</td></tr>
+      <tr><td>Room Nights Sold</td><td class="text-right">${occupiedRoomNights}</td></tr>
+      <tr><td>ADR (Average Daily Rate)</td><td class="text-right">${fmt(adr)}</td></tr>
+      <tr><td>RevPAR (Revenue Per Available Room)</td><td class="text-right">${fmt(revpar)}</td></tr>
+      <tr><td>Collection Rate</td><td class="text-right">${totalRevenue > 0 ? Math.round((totalCollected / totalRevenue) * 100) : 0}%</td></tr>
+    </table>
+
+    <div class="doc-footer">
+      Generated by EasyBeds on ${generatedAt} &middot; ${hotel.name}${hotelAddress ? ` &middot; ${hotelAddress}` : ''}
     </div>
   </div>
-
-  <div class="grid">
-    <div class="metric">
-      <div class="value">${fmt(totalCommission)}</div>
-      <div class="label">Commissions</div>
-    </div>
-    <div class="metric">
-      <div class="value">${fmt(outstanding)}</div>
-      <div class="label">Outstanding</div>
-    </div>
-    <div class="metric">
-      <div class="value">${fmt(totalRefunds)}</div>
-      <div class="label">Refunds</div>
-    </div>
-  </div>
-
-  <h2>Commission Breakdown</h2>
-  <table>
-    <thead><tr><th>Channel</th><th class="text-right">Commission</th></tr></thead>
-    <tbody>
-      ${Object.entries(commissionDetails).sort((a, b) => b[1] - a[1]).map(([ch, comm]) =>
-        `<tr><td>${ch}</td><td class="text-right">${fmt(comm)}</td></tr>`
-      ).join('')}
-      <tr class="total-row"><td>Total Commission</td><td class="text-right">${fmt(totalCommission)}</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Payments by Method</h2>
-  <table>
-    <thead><tr><th>Method</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr></thead>
-    <tbody>
-      ${Object.entries(paymentByMethod).sort((a, b) => b[1].total - a[1].total).map(([method, data]) =>
-        `<tr><td class="capitalize">${method}</td><td class="text-right">${data.count}</td><td class="text-right">${fmt(data.total)}</td></tr>`
-      ).join('')}
-      <tr class="total-row"><td>Total</td><td class="text-right">${payments.length}</td><td class="text-right">${fmt(totalCollected)}</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Key Metrics</h2>
-  <table>
-    <tr><td>Total Bookings</td><td class="text-right">${activeBookings.length}</td></tr>
-    <tr><td>Room Nights Sold</td><td class="text-right">${occupiedRoomNights}</td></tr>
-    <tr><td>ADR (Average Daily Rate)</td><td class="text-right">${fmt(adr)}</td></tr>
-    <tr><td>RevPAR (Revenue Per Available Room)</td><td class="text-right">${fmt(revpar)}</td></tr>
-    <tr><td>Collection Rate</td><td class="text-right">${totalRevenue > 0 ? Math.round((totalCollected / totalRevenue) * 100) : 0}%</td></tr>
-  </table>
-
-  <div class="footer">
-    Generated by EasyBeds on ${new Date().toLocaleString()} &middot; ${hotel.name} &middot; ${hotel.address || hotel.city || ''}
-  </div>
+  <script>window.onload = function() { setTimeout(function() { window.print(); }, 300); };</script>
 </body>
 </html>`;
 
@@ -211,8 +243,8 @@ export async function GET(request: NextRequest) {
     if (reqFormat === 'pdf') {
       return new NextResponse(html, {
         headers: {
-          'Content-Type': 'text/html',
-          'Content-Disposition': `inline; filename="financial-report-${format(from, 'yyyy-MM-dd')}-to-${format(to, 'yyyy-MM-dd')}.html"`,
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `attachment; filename="financial-report-${format(from, 'yyyy-MM-dd')}-to-${format(to, 'yyyy-MM-dd')}.html"`,
         },
       });
     }

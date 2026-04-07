@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
+import { initRouter, getViewTitle } from '@/lib/router'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { AppSidebar } from '@/components/layout/sidebar'
@@ -963,6 +964,20 @@ function LandingPage() {
 /* -------------------------------------------------------------------------- */
 function ViewRenderer() {
   const { currentView } = useAppStore()
+
+  // Initialise hash-based router and sync document title
+  useEffect(() => {
+    const cleanup = initRouter(
+      (view) => useAppStore.getState().setCurrentView(view),
+      (view) => { document.title = getViewTitle(view) },
+    )
+    return cleanup
+  }, [])
+
+  // Keep document title in sync when currentView changes
+  useEffect(() => {
+    document.title = getViewTitle(currentView)
+  }, [currentView])
 
   const viewComponents: Record<string, React.ReactNode> = {
     dashboard: <DashboardView />,

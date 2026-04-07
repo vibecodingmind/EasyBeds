@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface ChatMessage {
@@ -52,10 +53,9 @@ export function ConciergeView() {
     if (!bookingId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/ai/chat?bookingId=${bookingId}`)
-      const json = await res.json()
-      if (json.success) {
-        setMessages(json.data.messages)
+      const res = await api.getAIChatHistory(bookingId)
+      if (res.success) {
+        setMessages(res.data.messages as ChatMessage[])
       }
     } catch {
       console.error('Failed to load chat history')
@@ -68,10 +68,9 @@ export function ConciergeView() {
     if (!currentHotelId) return
     setLoadBookingLoading(true)
     try {
-      const res = await fetch(`/api/bookings?hotelId=${currentHotelId}&limit=50`)
-      const json = await res.json()
-      if (json.success) {
-        setBookings(json.data.bookings.map((b: BookingInfo & { room?: { name: string; roomNumber: string }; guest?: { firstName: string; lastName: string } }) => ({
+      const res = await api.getBookings(currentHotelId, { limit: 50 })
+      if (res.success) {
+        setBookings(res.data.bookings.map((b) => ({
           id: b.id,
           confirmationCode: b.confirmationCode,
           status: b.status,
@@ -102,16 +101,9 @@ export function ConciergeView() {
     if (!selectedBookingId || !inputMessage.trim() || sending) return
     setSending('staff')
     try {
-      // For staff messages, we use the portal message endpoint through the booking
-      // We need to find the booking's portalAccessCode
-      const res = await fetch(`/api/bookings/${selectedBookingId}?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success && json.data.portalAccessCode) {
-        await fetch(`/api/portal/${json.data.portalAccessCode}/message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `[Staff Reply] ${inputMessage}` }),
-        })
+      const bookingRes = await api.getBooking(selectedBookingId, currentHotelId)
+      if (bookingRes.success && bookingRes.data.portalAccessCode) {
+        await api.sendPortalMessage(bookingRes.data.portalAccessCode, { content: `[Staff Reply] ${inputMessage}` })
         setInputMessage('')
         loadChatHistory(selectedBookingId)
       } else {
@@ -141,26 +133,21 @@ export function ConciergeView() {
 
     try {
       const booking = bookings.find(b => b.id === selectedBookingId)
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: selectedBookingId,
-          message: msgText,
-          guestId: booking?.guest ? 'simulated' : 'unknown',
-        }),
+      const res = await api.sendAIChatMessage({
+        bookingId: selectedBookingId,
+        message: msgText,
+        guestId: booking?.guest ? 'simulated' : 'unknown',
       })
-      const json = await res.json()
-      if (json.success) {
+      if (res.success) {
         // Replace optimistic message and add AI response
         setMessages(prev => [
           ...prev.filter(m => m.id !== optimisticMsg.id),
           optimisticMsg,
-          json.data,
+          res.data as ChatMessage,
         ])
       } else {
         setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-        alert(json.error || 'Failed to get AI response')
+        alert(res.error || 'Failed to get AI response')
       }
     } catch {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))

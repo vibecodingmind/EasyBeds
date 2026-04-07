@@ -24,6 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAppStore } from '@/lib/store'
+import { formatCurrency } from '@/lib/currency'
 import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 
@@ -46,7 +47,7 @@ export function DashboardView() {
     fetchRooms,
     fetchBookings,
     setShowNewBookingDialog,
-    setCurrentView,
+    navigate,
     setSelectedBookingId,
     hotel,
     currentHotelId,
@@ -62,14 +63,6 @@ export function DashboardView() {
 
   const isLoading = loading.dashboard && !dashboardStats
   const currency = hotel?.currency || 'USD'
-
-  const formatCurrency = (amount: number) => {
-    try {
-      return amount.toLocaleString(undefined, { style: 'currency', currency })
-    } catch {
-      return `${currency} ${amount.toLocaleString()}`
-    }
-  }
 
   const stats = dashboardStats
     ? [
@@ -110,7 +103,7 @@ export function DashboardView() {
         },
         {
           title: 'Revenue This Month',
-          value: formatCurrency(dashboardStats.thisMonth.totalRevenue),
+          value: formatCurrency(dashboardStats.thisMonth.totalRevenue, currency),
           icon: DollarSign,
           color: 'text-emerald-600',
           bg: 'bg-emerald-50',
@@ -171,7 +164,7 @@ export function DashboardView() {
         >
           + New Booking
         </Button>
-        <Button variant="outline" onClick={() => setCurrentView('calendar')}>
+        <Button variant="outline" onClick={() => navigate('calendar')}>
           <CalendarDays className="mr-2 h-4 w-4" />
           View Calendar
         </Button>
@@ -228,7 +221,7 @@ export function DashboardView() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setCurrentView('bookings')}
+                onClick={() => navigate('bookings')}
               >
                 View all
                 <ArrowRight className="ml-1 h-3 w-3" />

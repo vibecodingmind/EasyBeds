@@ -45,6 +45,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
+import { formatCurrency } from '@/lib/currency'
 import { format, parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -89,21 +91,18 @@ export function NightAuditView() {
   const [runDate, setRunDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [runNotes, setRunNotes] = useState('')
 
-  const currencySymbol =
-    hotel?.currency === 'EUR' ? '€' : hotel?.currency === 'GBP' ? '£' : '$'
+  const currency = hotel?.currency || 'USD'
 
   const fetchAudits = useCallback(async () => {
     if (!currentHotelId) return
     setLoading(true)
     try {
       const [auditsRes, latestRes] = await Promise.all([
-        fetch(`/api/night-audit?hotelId=${currentHotelId}`),
-        fetch(`/api/night-audit/latest?hotelId=${currentHotelId}`),
+        api.getNightAudits(currentHotelId),
+        api.getLatestNightAudit(currentHotelId),
       ])
-      const auditsJson = await auditsRes.json()
-      const latestJson = await latestRes.json()
-      if (auditsJson.success) setAudits(auditsJson.data)
-      if (latestJson.success) setLatestAudit(latestJson.data)
+      if (auditsRes.success) setAudits(auditsRes.data as NightAudit[])
+      if (latestRes.success) setLatestAudit(latestRes.data as NightAudit)
     } catch {
       toast.error('Failed to fetch night audits')
     } finally {
@@ -119,23 +118,18 @@ export function NightAuditView() {
     if (!currentHotelId) return
     setRunning(true)
     try {
-      const res = await fetch(`/api/night-audit/run?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: runDate,
-          notes: runNotes || null,
-          auditorId: useAppStore.getState().currentUser?.id,
-        }),
+      const res = await api.runNightAudit(currentHotelId, {
+        date: runDate,
+        notes: runNotes || null,
+        auditorId: useAppStore.getState().currentUser?.id,
       })
-      const json = await res.json()
-      if (json.success) {
+      if (res.success) {
         toast.success('Night audit completed successfully')
         setShowRunDialog(false)
         setRunNotes('')
         fetchAudits()
       } else {
-        toast.error(json.error || 'Failed to run night audit')
+        toast.error(res.error || 'Failed to run night audit')
       }
     } catch {
       toast.error('Failed to run night audit')
@@ -231,14 +225,14 @@ export function NightAuditView() {
             <Card>
               <CardContent className="p-4 text-center">
                 <TrendingUp className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
-                <p className="text-2xl font-bold">{currencySymbol}{latestAudit.adr.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{formatCurrency(latestAudit.adr, currency)}</p>
                 <p className="text-xs text-muted-foreground">ADR (Avg Daily Rate)</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <BarChart3 className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
-                <p className="text-2xl font-bold">{currencySymbol}{latestAudit.revpar.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{formatCurrency(latestAudit.revpar, currency)}</p>
                 <p className="text-xs text-muted-foreground">RevPAR</p>
               </CardContent>
             </Card>
@@ -256,12 +250,12 @@ export function NightAuditView() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Room Revenue</span>
-                  <span className="text-sm font-bold">{currencySymbol}{latestAudit.roomRevenue.toLocaleString()}</span>
+                  <span className="text-sm font-bold">{formatCurrency(latestAudit.roomRevenue, currency)}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Total Revenue</span>
-                  <span className="text-lg font-bold text-emerald-600">{currencySymbol}{latestAudit.totalRevenue.toLocaleString()}</span>
+                  <span className="text-lg font-bold text-emerald-600">{formatCurrency(latestAudit.totalRevenue, currency)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -317,22 +311,22 @@ export function NightAuditView() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="rounded-lg border p-3 text-center">
                   <Banknote className="mx-auto mb-1 h-5 w-5 text-emerald-600" />
-                  <p className="text-lg font-bold">{currencySymbol}{latestAudit.cashReceived.toLocaleString()}</p>
+                  <p className="text-lg font-bold">{formatCurrency(latestAudit.cashReceived, currency)}</p>
                   <p className="text-xs text-muted-foreground">Cash</p>
                 </div>
                 <div className="rounded-lg border p-3 text-center">
                   <CreditCard className="mx-auto mb-1 h-5 w-5 text-blue-600" />
-                  <p className="text-lg font-bold">{currencySymbol}{latestAudit.cardReceived.toLocaleString()}</p>
+                  <p className="text-lg font-bold">{formatCurrency(latestAudit.cardReceived, currency)}</p>
                   <p className="text-xs text-muted-foreground">Card</p>
                 </div>
                 <div className="rounded-lg border p-3 text-center">
                   <Smartphone className="mx-auto mb-1 h-5 w-5 text-violet-600" />
-                  <p className="text-lg font-bold">{currencySymbol}{latestAudit.mobileMoneyReceived.toLocaleString()}</p>
+                  <p className="text-lg font-bold">{formatCurrency(latestAudit.mobileMoneyReceived, currency)}</p>
                   <p className="text-xs text-muted-foreground">Mobile Money</p>
                 </div>
                 <div className="rounded-lg border p-3 text-center">
                   <AlertCircle className="mx-auto mb-1 h-5 w-5 text-amber-600" />
-                  <p className="text-lg font-bold">{currencySymbol}{latestAudit.pendingPayments.toLocaleString()}</p>
+                  <p className="text-lg font-bold">{formatCurrency(latestAudit.pendingPayments, currency)}</p>
                   <p className="text-xs text-muted-foreground">Pending</p>
                 </div>
               </div>
@@ -362,7 +356,7 @@ export function NightAuditView() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold">{currencySymbol}{audit.totalRevenue.toLocaleString()}</p>
+                          <p className="text-sm font-bold">{formatCurrency(audit.totalRevenue, currency)}</p>
                           <p className="text-[10px] text-muted-foreground">Revenue</p>
                         </div>
                       </div>

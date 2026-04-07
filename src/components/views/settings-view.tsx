@@ -159,9 +159,8 @@ function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
 
   const fetchPolicies = useCallback(async () => {
     try {
-      const res = await fetch(`/api/cancellation-policies?hotelId=${hotelId}`)
-      const json = await res.json()
-      if (json.success) setPolicies(json.data)
+      const res = await api.getCancellationPolicies(hotelId)
+      if (res.success) setPolicies(res.data as CancellationPolicy[])
     } catch {
       toast.error('Failed to fetch policies')
     } finally {
@@ -175,16 +174,10 @@ function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
     if (!form.name || form.rules.length === 0) return
     setSaving(true)
     try {
-      const url = editingPolicy
-        ? `/api/cancellation-policies/${editingPolicy.id}?hotelId=${hotelId}`
-        : `/api/cancellation-policies?hotelId=${hotelId}`
-      const res = await fetch(url, {
-        method: editingPolicy ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = editingPolicy
+        ? await api.updateCancellationPolicy(editingPolicy.id, hotelId, form)
+        : await api.createCancellationPolicy(hotelId, form)
+      if (res.success) {
         toast.success(editingPolicy ? 'Policy updated' : 'Policy created')
         setShowDialog(false)
         setEditingPolicy(null)
@@ -196,7 +189,7 @@ function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
         })
         fetchPolicies()
       } else {
-        toast.error(json.error || 'Failed to save')
+        toast.error(res.error || 'Failed to save')
       }
     } catch {
       toast.error('Failed to save policy')
@@ -207,15 +200,12 @@ function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/cancellation-policies/${id}?hotelId=${hotelId}`, {
-        method: 'DELETE',
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.deleteCancellationPolicy(id, hotelId)
+      if (res.success) {
         toast.success('Policy deleted')
         fetchPolicies()
       } else {
-        toast.error(json.error || 'Failed to delete')
+        toast.error(res.error || 'Failed to delete')
       }
     } catch {
       toast.error('Failed to delete policy')

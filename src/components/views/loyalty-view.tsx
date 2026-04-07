@@ -25,6 +25,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
+import { formatCurrency } from '@/lib/currency'
 import { toast } from 'sonner'
 
 interface GuestRow {
@@ -70,12 +72,11 @@ const typeColors: Record<string, string> = {
   adjustment: 'bg-blue-100 text-blue-700',
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 }).format(amount)
-}
+
 
 export function LoyaltyView() {
-  const { currentHotelId } = useAppStore()
+  const { currentHotelId, hotel } = useAppStore()
+  const currency = hotel?.currency || 'USD'
   const [guests, setGuests] = useState<GuestRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -96,22 +97,18 @@ export function LoyaltyView() {
     if (!currentHotelId) return
     setLoading(true)
     try {
-      const sp = new URLSearchParams({ hotelId: currentHotelId, limit: '50', sortBy })
-      if (search) sp.set('search', search)
-      const res = await fetch(`/api/loyalty/guests?${sp}`)
-      const json = await res.json()
-      if (json.success) setGuests(json.data.guests)
+      const res = await api.getLoyaltyGuests(currentHotelId, { search, sortBy })
+      if (res.success) setGuests(res.data.guests as GuestRow[])
     } catch { console.error('Failed to fetch guests') } finally { setLoading(false) }
   }, [currentHotelId, search, sortBy])
 
   const fetchConfig = useCallback(async () => {
     if (!currentHotelId) return
     try {
-      const res = await fetch(`/api/loyalty/config?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) {
-        setConfigEnabled(json.data.loyaltyEnabled)
-        setConfigRate(json.data.loyaltyPointsPerCurrency?.toString() || '1')
+      const res = await api.getLoyaltyConfig(currentHotelId)
+      if (res.success) {
+        setConfigEnabled(res.data.loyaltyEnabled)
+        setConfigRate(res.data.loyaltyPointsPerCurrency?.toString() || '1')
       }
     } catch { console.error('Failed to fetch config') }
   }, [currentHotelId])
@@ -125,22 +122,16 @@ export function LoyaltyView() {
     if (!currentHotelId) return
     setConfigSaving(true)
     try {
-      const res = await fetch('/api/loyalty/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ hotelId: currentHotelId, loyaltyEnabled: configEnabled, loyaltyPointsPerCurrency: parseFloat(configRate) || 1 }),
-      })
-      const json = await res.json()
-      if (json.success) { toast.success('Loyalty config updated') } else { toast.error(json.error) }
+      const res = await api.updateLoyaltyConfig(currentHotelId, { loyaltyEnabled: configEnabled, loyaltyPointsPerCurrency: parseFloat(configRate) || 1 })
+      if (res.success) { toast.success('Loyalty config updated') } else { toast.error(res.error) }
     } catch { toast.error('Failed to update config') } finally { setConfigSaving(false) }
   }
 
   const handleSelectGuest = async (guestId: string) => {
     setDetailLoading(true)
     try {
-      const res = await fetch(`/api/loyalty/guests/${guestId}?hotelId=${currentHotelId}`)
-      const json = await res.json()
-      if (json.success) setSelectedGuest(json.data)
+      const res = await api.getLoyaltyGuestDetail(guestId, currentHotelId)
+      if (res.success) setSelectedGuest(res.data as GuestDetail)
     } catch { console.error('Failed to fetch guest detail') } finally { setDetailLoading(false) }
   }
 
@@ -149,19 +140,14 @@ export function LoyaltyView() {
     const pts = parseInt(redeemPoints)
     if (isNaN(pts) || pts <= 0) { toast.error('Enter valid points'); return }
     try {
-      const res = await fetch(`/api/loyalty/guests/${selectedGuest.guest.id}/redeem?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ points: pts }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        toast.success(`Redeemed ${pts} points for ${formatCurrency(json.data.discountAmount)}`)
+      const res = await api.redeemLoyaltyPoints(selectedGuest.guest.id, currentHotelId, { points: pts })
+      if (res.success) {
+        toast.success(`Redeemed ${pts} points for ${formatCurrency(res.data.discountAmount, currency)}`)
         setRedeemOpen(false)
         setRedeemPoints('')
         handleSelectGuest(selectedGuest.guest.id)
         fetchGuests()
-      } else { toast.error(json.error) }
+      } else { toast.error(res.error) }
     } catch { toast.error('Failed to redeem') }
   }
 
@@ -170,20 +156,15 @@ export function LoyaltyView() {
     const pts = parseInt(adjustPoints)
     if (isNaN(pts) || pts === 0) { toast.error('Enter valid points (non-zero)'); return }
     try {
-      const res = await fetch(`/api/loyalty/guests/${selectedGuest.guest.id}/adjust?hotelId=${currentHotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ points: pts, reason: adjustReason.trim() }),
-      })
-      const json = await res.json()
-      if (json.success) {
+      const res = await api.adjustLoyaltyPoints(selectedGuest.guest.id, currentHotelId, { points: pts, reason: adjustReason.trim() })
+      if (res.success) {
         toast.success(`Adjusted ${pts > 0 ? '+' : ''}${pts} points`)
         setAdjustOpen(false)
         setAdjustPoints('')
         setAdjustReason('')
         handleSelectGuest(selectedGuest.guest.id)
         fetchGuests()
-      } else { toast.error(json.error) }
+      } else { toast.error(res.error) }
     } catch { toast.error('Failed to adjust') }
   }
 
@@ -248,7 +229,7 @@ export function LoyaltyView() {
               <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center"><TrendingUp className="h-5 w-5 text-green-600" /></div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-xl font-bold">{formatCurrency(totalSpent)}</p>
+                <p className="text-xl font-bold">{formatCurrency(totalSpent, currency)}</p>
               </div>
             </div>
           </CardContent>
@@ -333,7 +314,7 @@ export function LoyaltyView() {
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium">{g.loyaltyPoints.toLocaleString()}</TableCell>
                         <TableCell className="text-right">{g.totalStays}</TableCell>
-                        <TableCell className="text-right text-sm">{formatCurrency(g.totalSpent)}</TableCell>
+                        <TableCell className="text-right text-sm">{formatCurrency(g.totalSpent, currency)}</TableCell>
                         <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                       </TableRow>
                     ))}

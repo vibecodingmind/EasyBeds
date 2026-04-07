@@ -263,6 +263,67 @@ export function paymentReceiptTemplate(data: TemplateData) {
   return baseTemplate(subject, bodyHtml, data.hotelName, data.hotelWebsite);
 }
 
+// ─── Auth Templates ──────────────────────────────────────────────────────────
+
+export function forgotPasswordTemplate({ name, resetLink }: { name: string; resetLink: string }) {
+  const subject = 'Reset Your Password — EasyBeds';
+  const bodyHtml = `
+    <h2 style="margin:0 0 16px;color:#18181b;font-size:20px;">Password Reset Request 🔐</h2>
+    <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;line-height:1.6;">
+      Hi ${name},<br><br>
+      We received a request to reset your password. Click the button below to set a new password.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#059669,#10b981);color:#ffffff;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">
+        Reset Password
+      </a>
+    </div>
+    <p style="margin:0 0 8px;color:#71717a;font-size:14px;line-height:1.6;">
+      If the button above doesn't work, copy and paste this link into your browser:
+    </p>
+    <p style="margin:0 0 16px;color:#059669;font-size:13px;word-break:break-all;">
+      ${resetLink}
+    </p>
+    <div style="background-color:#fefce8;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #fef08a;">
+      <p style="margin:0;color:#854d0e;font-size:13px;line-height:1.5;">
+        ⚠️ This link expires in <strong>1 hour</strong>. If you didn't request a password reset, you can safely ignore this email.
+      </p>
+    </div>
+  `;
+  return baseTemplate(subject, bodyHtml, 'EasyBeds');
+}
+
+export function emailVerificationTemplate({ name, verifyLink }: { name: string; verifyLink: string }) {
+  const subject = 'Verify Your Email — Welcome to EasyBeds';
+  const bodyHtml = `
+    <h2 style="margin:0 0 16px;color:#18181b;font-size:20px;">Welcome to EasyBeds! 🎉</h2>
+    <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;line-height:1.6;">
+      Hi ${name},<br><br>
+      Thanks for creating your account! Please verify your email address to get started.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${verifyLink}" style="display:inline-block;background:linear-gradient(135deg,#059669,#10b981);color:#ffffff;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">
+        Verify Email Address
+      </a>
+    </div>
+    <p style="margin:0 0 8px;color:#71717a;font-size:14px;line-height:1.6;">
+      If the button above doesn't work, copy and paste this link into your browser:
+    </p>
+    <p style="margin:0 0 16px;color:#059669;font-size:13px;word-break:break-all;">
+      ${verifyLink}
+    </p>
+    <div style="background-color:#f0fdf4;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #bbf7d0;">
+      <p style="margin:0;color:#166534;font-size:13px;line-height:1.5;">
+        ✅ Verifying your email helps secure your account and ensures you receive important booking notifications.
+      </p>
+    </div>
+    <p style="margin:0;color:#71717a;font-size:14px;">
+      This link expires in <strong>1 hour</strong>.
+    </p>
+  `;
+  return baseTemplate(subject, bodyHtml, 'EasyBeds');
+}
+
 // ─── Template Registry ──────────────────────────────────────────────────────
 
 export interface EmailTemplateInfo {

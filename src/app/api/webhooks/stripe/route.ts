@@ -1,30 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import crypto from 'crypto';
 import { db } from '@/lib/db';
 
 // =============================================================================
 // Stripe Webhook Endpoint — EasyBeds
 // Handles Stripe event webhooks for payment status updates.
-// Requires STRIPE_WEBHOOK_SECRET for signature verification in production.
+// Implements proper signature verification when STRIPE_WEBHOOK_SECRET is set.
 // =============================================================================
+
+/**
+ * Verify Stripe webhook signature using the raw body.
+ * Compatible with the Stripe webhook signing scheme (t=timestamp,v1=signature).
+ */
+function verifyStripeSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  const elements = signature.split(',');
+  let timestamp = '';
+  let v1Signature = '';
+
+  for (const element of elements) {
+    const [key, value] = element.split('=');
+    if (key === 't') timestamp = value;
+    if (key === 'v1') v1Signature = value;
+  }
+
+  if (!timestamp || !v1Signature) {
+    return false;
+  }
+
+  // Check timestamp freshness (reject events older than 5 minutes)
+  const tolerance = 300; // 5 minutes
+  const currentTime = Math.floor(Date.now() / 1000);
+  const eventTimestamp = parseInt(timestamp, 10);
+
+  if (isNaN(eventTimestamp) || currentTime - eventTimestamp > tolerance) {
+    console.warn('[STRIPE WEBHOOK] Rejected: timestamp too old or invalid');
+    return false;
+  }
+
+  // Construct the signed payload
+  const signedPayload = `${timestamp}.${payload}`;
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex');
+
+  // Constant-time comparison to prevent timing attacks
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(v1Signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch {
+    // Buffers must be same length for timingSafeEqual
+    return false;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text();
+    // Read raw body first — needed for signature verification
+    const rawBody = await request.text();
     const signature = headers().get('stripe-signature');
 
-    // Verify webhook signature if STRIPE_WEBHOOK_SECRET is configured
-    if (process.env.STRIPE_WEBHOOK_SECRET && signature) {
-      // In production, use @stripe/stripe-js or stripe npm package:
-      // const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      // const event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET);
-      // For now, we accept the webhook payload after basic validation.
-      console.log('[STRIPE WEBHOOK] Signature present, webhook secret configured.');
+    // Verify webhook signature when STRIPE_WEBHOOK_SECRET is configured
+    if (process.env.STRIPE_WEBHOOK_SECRET) {
+      if (!signature) {
+        console.warn('[STRIPE WEBHOOK] Missing stripe-signature header');
+        return NextResponse.json(
+          { error: 'Missing webhook signature' },
+          { status: 400 }
+        );
+      }
+
+      const isValid = verifyStripeSignature(
+        rawBody,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+
+      if (!isValid) {
+        console.warn('[STRIPE WEBHOOK] Invalid webhook signature');
+        return NextResponse.json(
+          { error: 'Invalid webhook signature' },
+          { status: 400 }
+        );
+      }
+
+      console.log('[STRIPE WEBHOOK] Signature verified successfully');
+    } else {
+      // In development without STRIPE_WEBHOOK_SECRET, allow through with a warning
+      console.warn(
+        '[STRIPE WEBHOOK] STRIPE_WEBHOOK_SECRET not configured — skipping signature verification. ' +
+        'This is acceptable in development but must be configured in production.'
+      );
     }
 
     let event: { type: string; data: { object: Record<string, unknown> } };
     try {
-      event = JSON.parse(body);
+      event = JSON.parse(rawBody);
     } catch {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
