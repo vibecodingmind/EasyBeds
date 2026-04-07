@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "bun install && bunx prisma generate && bun run build"
 
 [deploy]
-startCommand = "bunx prisma db push --accept-data-loss && PORT=${PORT:-3000} node .next/standalone/server.js"
+startCommand = "bunx prisma db push --accept-data-loss && node .next/standalone/server.js"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/api"
