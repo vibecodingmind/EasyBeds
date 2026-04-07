@@ -19,8 +19,8 @@ import { toast } from 'sonner'
 
 export function LoginView() {
   const { login, register } = useAppStore()
-  const [email, setEmail] = useState('demo@easybeds.com')
-  const [password, setPassword] = useState('demo123')
+  const [email, setEmail] = useState('owner@easybeds.com')
+  const [password, setPassword] = useState('owner123')
   const [showPassword, setShowPassword] = useState(false)
   const [showSignup, setShowSignup] = useState(false)
   const [signupData, setSignupData] = useState({

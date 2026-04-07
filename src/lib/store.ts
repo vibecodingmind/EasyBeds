@@ -83,6 +83,8 @@ interface AppState {
   currentHotelId: string | null
   currentUser: User | null
   userRole: string | null
+  platformRole: string | null
+  allHotels: Array<{ id: string; name: string; slug: string; city: string | null; country: string; plan: string; role: string }> | null
   token: string | null
 
   // Navigation
@@ -152,6 +154,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentHotelId: null,
   currentUser: null,
   userRole: null,
+  platformRole: null,
+  allHotels: null,
   token: null,
 
   // Navigation
@@ -207,7 +211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const response = await api.login(email, password)
     if (!response.success) return false
 
-    const { token, user, hotel, role } = response.data
+    const { token, user, hotel, role, platformRole, allHotels } = response.data
 
     // Persist token to localStorage for API client
     if (typeof window !== 'undefined') {
@@ -224,6 +228,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         avatarUrl: user.avatarUrl,
       },
       userRole: role,
+      platformRole: platformRole || 'user',
+      allHotels: allHotels || null,
       token,
       currentView: 'dashboard',
     })
@@ -264,6 +270,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         email: user.email,
       },
       userRole: 'owner',
+      platformRole: 'user',
+      allHotels: null,
       token,
       currentView: 'dashboard',
     })
@@ -292,6 +300,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentHotelId: null,
       currentUser: null,
       userRole: null,
+      platformRole: null,
+      allHotels: null,
       token: null,
       currentView: 'dashboard',
       bookings: [],

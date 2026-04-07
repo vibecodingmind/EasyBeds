@@ -48,7 +48,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/lib/store'
-import { api } from '@/lib/api'
+import { api, type HotelUserItem } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -451,6 +451,288 @@ function CancellationPolicyManager({ hotelId }: { hotelId: string }) {
   )
 }
 
+// ─── Staff Manager Sub-component ─────────────────────────────────────────
+
+function StaffManager({ hotelId }: { hotelId: string }) {
+  const [staffList, setStaffList] = useState<HotelUserItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showDialog, setShowDialog] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'staff',
+  })
+
+  const fetchStaff = useCallback(async () => {
+    try {
+      const res = await api.getHotelUsers(hotelId)
+      if (res.success) setStaffList(res.data)
+    } catch {
+      toast.error('Failed to fetch staff')
+    } finally {
+      setLoading(false)
+    }
+  }, [hotelId])
+
+  useEffect(() => { fetchStaff() }, [fetchStaff])
+
+  const handleAdd = async () => {
+    if (!form.name || !form.email) return
+    setSaving(true)
+    try {
+      const res = await api.addHotelUser(hotelId, {
+        name: form.name,
+        email: form.email,
+        password: form.password || undefined,
+        role: form.role as 'manager' | 'staff' | 'housekeeping',
+      })
+      if (res.success) {
+        let msg = `${form.name} added as ${form.role}!`
+        if (res.data.defaultPassword) {
+          msg += ` Default password: ${res.data.defaultPassword}`
+        }
+        toast.success(msg, { duration: 6000 })
+        setShowDialog(false)
+        setForm({ name: '', email: '', password: '', role: 'staff' })
+        fetchStaff()
+      } else {
+        toast.error(res.error || 'Failed to add staff')
+      }
+    } catch {
+      toast.error('Failed to add staff')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const res = await api.updateHotelUserRole(hotelId, userId, { role: newRole })
+      if (res.success) {
+        toast.success('Role updated')
+        fetchStaff()
+      } else {
+        toast.error(res.error || 'Failed to update role')
+      }
+    } catch {
+      toast.error('Failed to update role')
+    }
+  }
+
+  const handleRemove = async (userId: string, name: string) => {
+    if (!confirm(`Remove ${name} from this hotel?`)) return
+    try {
+      const res = await api.removeHotelUser(hotelId, userId)
+      if (res.success) {
+        toast.success(`${name} removed`)
+        fetchStaff()
+      } else {
+        toast.error(res.error || 'Failed to remove')
+      }
+    } catch {
+      toast.error('Failed to remove staff')
+    }
+  }
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'owner': return 'bg-purple-600 text-white'
+      case 'manager': return 'bg-blue-600 text-white'
+      case 'staff': return 'bg-emerald-600 text-white'
+      case 'housekeeping': return 'bg-amber-600 text-white'
+      default: return 'bg-gray-600 text-white'
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium">Team Members ({staffList.length})</h3>
+          <p className="text-xs text-muted-foreground">Manage who has access to your hotel</p>
+        </div>
+        <Button
+          className="bg-emerald-600 hover:bg-emerald-700"
+          size="sm"
+          onClick={() => {
+            setForm({ name: '', email: '', password: '', role: 'staff' })
+            setShowDialog(true)
+          }}
+        >
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Add Staff
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </div>
+      ) : staffList.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-12 text-center">
+          <Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-muted-foreground">No team members yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">Add staff members to help manage your property</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border">
+          <div className="grid grid-cols-[1fr_1fr_100px_80px] items-center gap-4 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
+            <span>Member</span>
+            <span>Role</span>
+            <span>Status</span>
+            <span className="text-right">Actions</span>
+          </div>
+          {staffList.map((member) => (
+            <div key={member.id} className="grid grid-cols-[1fr_1fr_100px_80px] items-center gap-4 border-b px-4 py-3 last:border-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">
+                  {member.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{member.user.name}</p>
+                  <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                </div>
+              </div>
+              <div>
+                {member.role === 'owner' ? (
+                  <Badge className={cn('text-[10px]', getRoleBadgeColor(member.role))}>
+                    <Crown className="mr-1 h-3 w-3" /> Owner
+                  </Badge>
+                ) : (
+                  <Select
+                    value={member.role}
+                    onValueChange={(v) => handleRoleChange(member.userId, v)}
+                  >
+                    <SelectTrigger className="h-7 w-32 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="staff">Front Desk</SelectItem>
+                      <SelectItem value="housekeeping">Housekeeping</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div>
+                {member.isActive ? (
+                  <Badge variant="secondary" className="text-[10px] text-emerald-600">
+                    <Check className="mr-1 h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-[10px] text-gray-500">
+                    Inactive
+                  </Badge>
+                )}
+              </div>
+              <div className="flex justify-end">
+                {member.role !== 'owner' && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleRemove(member.userId, member.user.name)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Staff Dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Team Member</DialogTitle>
+            <DialogDescription>
+              Invite a new team member to manage your hotel. They will receive a default password to log in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                placeholder="Jane Doe"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Address</Label>
+              <Input
+                type="email"
+                placeholder="jane@hotel.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password (optional)</Label>
+              <Input
+                type="password"
+                placeholder="Leave blank for default: changeme123"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+              <p className="text-[10px] text-muted-foreground">If left blank, a default password will be assigned</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={form.role}
+                onValueChange={(v) => setForm({ ...form, role: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manager">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-blue-600 text-white text-[10px]">Manager</Badge>
+                      <span className="text-xs text-muted-foreground">Full operations access</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="staff">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-emerald-600 text-white text-[10px]">Staff</Badge>
+                      <span className="text-xs text-muted-foreground">Bookings, guests, check-in</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="housekeeping">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-amber-600 text-white text-[10px]">Housekeeping</Badge>
+                      <span className="text-xs text-muted-foreground">Room tasks only</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleAdd}
+              disabled={saving || !form.name || !form.email}
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function SettingsView() {
@@ -516,14 +798,6 @@ export function SettingsView() {
       setSaving(false)
     }
   }
-
-  // Staff dialog state
-  const [showAddStaffDialog, setShowAddStaffDialog] = useState(false)
-  const [newStaff, setNewStaff] = useState({
-    name: '',
-    email: '',
-    role: 'Front Desk',
-  })
 
   const isLoadingHotel = loading.hotel && !hotel
 
@@ -865,142 +1139,7 @@ export function SettingsView() {
 
         {/* ─── Staff Management ────────────────────────────────────────── */}
         <TabsContent value="staff">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Users className="h-4 w-4" />
-                    Staff Management
-                  </CardTitle>
-                  <CardDescription>Manage team members and their access</CardDescription>
-                </div>
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                  size="sm"
-                  onClick={() => setShowAddStaffDialog(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Staff
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {isLoadingHotel ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : hotel?._count && hotel._count.users > 0 ? (
-                  <div className="rounded-lg border">
-                    <div className="grid grid-cols-[1fr_1fr_100px] items-center gap-4 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
-                      <span>Member</span>
-                      <span>Role</span>
-                      <span className="text-right">Status</span>
-                    </div>
-                    {/* Placeholder rows for existing team members count */}
-                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                      <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                      <p>
-                        {hotel._count.users} active team member
-                        {hotel._count.users !== 1 ? 's' : ''}
-                      </p>
-                      <p className="mt-1 text-xs">
-                        Detailed staff list will appear here as members are added.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed py-12 text-center">
-                    <Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                    <p className="text-sm font-medium text-muted-foreground">
-                      No team members yet
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Add staff members to help manage your property
-                    </p>
-                    <Button
-                      variant="outline"
-                      className="mt-4"
-                      size="sm"
-                      onClick={() => setShowAddStaffDialog(true)}
-                    >
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Add First Member
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Add Staff Dialog */}
-          <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Staff Member</DialogTitle>
-                <DialogDescription>
-                  Invite a new team member to manage your hotel
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Full Name</Label>
-                  <Input
-                    placeholder="Jane Doe"
-                    value={newStaff.name}
-                    onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="jane@hotel.com"
-                    value={newStaff.email}
-                    onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Role</Label>
-                  <Select
-                    value={newStaff.role}
-                    onValueChange={(v) => setNewStaff({ ...newStaff, role: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Front Desk">Front Desk</SelectItem>
-                      <SelectItem value="Housekeeping Lead">Housekeeping Lead</SelectItem>
-                      <SelectItem value="Maintenance">Maintenance</SelectItem>
-                      <SelectItem value="Manager">Manager</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddStaffDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => {
-                    setShowAddStaffDialog(false)
-                    setNewStaff({ name: '', email: '', role: 'Front Desk' })
-                    toast.success('Staff invitation sent')
-                  }}
-                  disabled={!newStaff.name || !newStaff.email}
-                >
-                  Send Invitation
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <StaffManager hotelId={currentHotelId} />
         </TabsContent>
 
         {/* ─── Plan ─────────────────────────────────────────────────────── */}

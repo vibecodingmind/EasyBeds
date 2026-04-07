@@ -713,8 +713,8 @@ function AuthModal({
 }) {
   const { login, register } = useAppStore()
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('owner@easybeds.com')
+  const [password, setPassword] = useState('owner123')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [signupData, setSignupData] = useState({
@@ -846,6 +846,11 @@ function AuthModal({
                 'Sign In'
               )}
             </Button>
+            <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
+              <p className="mb-1 font-medium text-gray-600">Demo accounts:</p>
+              <p>Owner: <span className="font-mono">owner@easybeds.com</span> / <span className="font-mono">owner123</span></p>
+              <p>Admin: <span className="font-mono">admin@easybeds.com</span> / <span className="font-mono">admin123</span></p>
+            </div>
             <p className="text-center text-sm text-gray-500">
               Don&apos;t have an account?{' '}
               <button

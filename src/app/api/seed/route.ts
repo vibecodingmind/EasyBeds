@@ -6,37 +6,92 @@ import { addDays, subDays, format } from 'date-fns';
 // POST /api/seed — Creates demo hotel with rooms, bookings, channels, guests
 export async function POST() {
   try {
-    // Check if demo data already exists
-    const existingHotel = await db.hotel.findFirst({
-      where: { slug: 'demo-hotel' },
-    });
-
-    if (existingHotel) {
-      return NextResponse.json(
-        { success: false, error: 'Demo data already exists. Delete the demo hotel first to re-seed.' },
-        { status: 409 }
-      );
-    }
-
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
 
+    // ── Clear all existing data ────────────────────────────────────────────
+    await db.$transaction([
+      db.loyaltyTransaction.deleteMany(),
+      db.review.deleteMany(),
+      db.guestMessage.deleteMany(),
+      db.nightAudit.deleteMany(),
+      db.invoice.deleteMany(),
+      db.notification.deleteMany(),
+      db.auditLog.deleteMany(),
+      db.cancellationPolicy.deleteMany(),
+      db.housekeepingTask.deleteMany(),
+      db.syncLog.deleteMany(),
+      db.payment.deleteMany(),
+      db.dynamicRateRule.deleteMany(),
+      db.ratePlan.deleteMany(),
+      db.availabilityBlock.deleteMany(),
+      db.booking.deleteMany(),
+      db.coupon.deleteMany(),
+      db.guest.deleteMany(),
+      db.channel.deleteMany(),
+      db.room.deleteMany(),
+      db.hotelUser.deleteMany(),
+      db.hotel.deleteMany(),
+      db.user.deleteMany(),
+    ]);
+
     const result = await db.$transaction(async (tx) => {
-      // Create User
-      const user = await tx.user.create({
+      // ── Create Users ─────────────────────────────────────────────────────
+      const adminUser = await tx.user.create({
         data: {
-          email: 'demo@easybeds.com',
-          passwordHash: hashPassword('demo123'),
-          name: 'Demo Owner',
+          email: 'admin@easybeds.com',
+          passwordHash: hashPassword('admin123'),
+          name: 'Platform Admin',
           emailVerified: true,
+          role: 'admin',
         },
       });
 
-      // Create Hotel
+      const ownerUser = await tx.user.create({
+        data: {
+          email: 'owner@easybeds.com',
+          passwordHash: hashPassword('owner123'),
+          name: 'John Owera',
+          emailVerified: true,
+          role: 'user',
+        },
+      });
+
+      const managerUser = await tx.user.create({
+        data: {
+          email: 'manager@easybeds.com',
+          passwordHash: hashPassword('manager123'),
+          name: 'Grace Mwangi',
+          emailVerified: true,
+          role: 'user',
+        },
+      });
+
+      const staffUser = await tx.user.create({
+        data: {
+          email: 'staff@easybeds.com',
+          passwordHash: hashPassword('staff123'),
+          name: 'Peter Kimaro',
+          emailVerified: true,
+          role: 'user',
+        },
+      });
+
+      const housekeepingUser = await tx.user.create({
+        data: {
+          email: 'housekeeping@easybeds.com',
+          passwordHash: hashPassword('house123'),
+          name: 'Fatima Hassan',
+          emailVerified: true,
+          role: 'user',
+        },
+      });
+
+      // ── Create Hotel ─────────────────────────────────────────────────────
       const hotel = await tx.hotel.create({
         data: {
           name: 'Paradise Court Hotel',
-          slug: 'demo-hotel',
+          slug: 'paradise-court',
           description: 'A beautiful boutique hotel in the heart of Dar es Salaam with stunning ocean views.',
           address: '123 Azikiwe Street',
           city: 'Dar es Salaam',
@@ -52,16 +107,21 @@ export async function POST() {
         },
       });
 
-      // Create HotelUser
-      const hotelUser = await tx.hotelUser.create({
-        data: {
-          hotelId: hotel.id,
-          userId: user.id,
-          role: 'owner',
-        },
+      // ── Create HotelUser Memberships ─────────────────────────────────────
+      await tx.hotelUser.create({
+        data: { hotelId: hotel.id, userId: ownerUser.id, role: 'owner' },
+      });
+      await tx.hotelUser.create({
+        data: { hotelId: hotel.id, userId: managerUser.id, role: 'manager' },
+      });
+      await tx.hotelUser.create({
+        data: { hotelId: hotel.id, userId: staffUser.id, role: 'staff' },
+      });
+      await tx.hotelUser.create({
+        data: { hotelId: hotel.id, userId: housekeepingUser.id, role: 'housekeeping' },
       });
 
-      // Create Channels
+      // ── Create Channels ──────────────────────────────────────────────────
       const channels = await Promise.all([
         tx.channel.create({ data: { hotelId: hotel.id, name: 'Walk-in', type: 'walkin', syncMethod: 'manual' } }),
         tx.channel.create({ data: { hotelId: hotel.id, name: 'Website', type: 'website', syncMethod: 'manual' } }),
@@ -72,7 +132,7 @@ export async function POST() {
         tx.channel.create({ data: { hotelId: hotel.id, name: 'Travel Agent', type: 'agent', syncMethod: 'manual', commission: 0.10 } }),
       ]);
 
-      // Create Rooms
+      // ── Create Rooms ─────────────────────────────────────────────────────
       const rooms = await Promise.all([
         tx.room.create({
           data: {
@@ -124,7 +184,7 @@ export async function POST() {
         }),
       ]);
 
-      // Create Guests
+      // ── Create Guests ────────────────────────────────────────────────────
       const guests = await Promise.all([
         tx.guest.create({
           data: {
@@ -169,21 +229,14 @@ export async function POST() {
         }),
       ]);
 
-      // Create sample bookings with various statuses
+      // ── Create Bookings ──────────────────────────────────────────────────
       const bookingData = [
-        // Checked in today
         { roomIdx: 0, guestIdx: 0, channelIdx: 0, checkInOffset: 0, nights: 3, status: 'checked_in' as const, numGuests: 2, ref: 'OTA-44291' },
-        // Confirmed upcoming
         { roomIdx: 1, guestIdx: 1, channelIdx: 4, checkInOffset: 1, nights: 4, status: 'confirmed' as const, numGuests: 2, ref: 'BN-8827361' },
-        // Checked out yesterday
         { roomIdx: 2, guestIdx: 2, channelIdx: 1, checkInOffset: -3, nights: 3, status: 'checked_out' as const, numGuests: 1, ref: null },
-        // Confirmed for next week
         { roomIdx: 0, guestIdx: 4, channelIdx: 5, checkInOffset: 5, nights: 7, status: 'confirmed' as const, numGuests: 2, ref: 'AIRB-192837' },
-        // Pending
         { roomIdx: 3, guestIdx: 3, channelIdx: 2, checkInOffset: 3, nights: 2, status: 'pending' as const, numGuests: 1, ref: null },
-        // Cancelled
         { roomIdx: 4, guestIdx: 5, channelIdx: 6, checkInOffset: -1, nights: 5, status: 'cancelled' as const, numGuests: 4, ref: 'TA-2024-001' },
-        // Checked in
         { roomIdx: 5, guestIdx: 1, channelIdx: 0, checkInOffset: -1, nights: 5, status: 'checked_in' as const, numGuests: 2, ref: null },
       ];
 
@@ -213,6 +266,7 @@ export async function POST() {
             totalPrice,
             currency: hotel.currency,
             status: bd.status,
+            balanceDue: totalPrice,
             ...(bd.status === 'checked_in' && { checkedInAt: addDays(today, bd.checkInOffset) }),
             ...(bd.status === 'checked_out' && {
               checkedInAt: addDays(today, bd.checkInOffset),
@@ -256,7 +310,7 @@ export async function POST() {
         bookings.push(booking);
       }
 
-      // Create Cancellation Policies
+      // ── Create Cancellation Policies ─────────────────────────────────────
       await Promise.all([
         tx.cancellationPolicy.create({
           data: {
@@ -278,7 +332,7 @@ export async function POST() {
         }),
       ]);
 
-      // Create Dynamic Rate Rules
+      // ── Create Dynamic Rate Rules ────────────────────────────────────────
       await Promise.all([
         tx.dynamicRateRule.create({
           data: {
@@ -305,7 +359,7 @@ export async function POST() {
         }),
       ]);
 
-      // Create Coupons
+      // ── Create Coupons ───────────────────────────────────────────────────
       await Promise.all([
         tx.coupon.create({
           data: {
@@ -321,7 +375,7 @@ export async function POST() {
         }),
       ]);
 
-      // Create Housekeeping Tasks
+      // ── Create Housekeeping Tasks ────────────────────────────────────────
       await Promise.all([
         tx.housekeepingTask.create({
           data: {
@@ -338,12 +392,12 @@ export async function POST() {
         tx.housekeepingTask.create({
           data: {
             hotelId: hotel.id, roomId: rooms[2].id, taskType: 'deep_clean', priority: 'medium',
-            status: 'in_progress', title: 'Deep clean - Room 202', dueDate: today, assignedTo: user.id,
+            status: 'in_progress', title: 'Deep clean - Room 202', dueDate: today, assignedTo: housekeepingUser.id,
           },
         }),
       ]);
 
-      // Create a maintenance block
+      // ── Create Maintenance Block ─────────────────────────────────────────
       await tx.availabilityBlock.create({
         data: {
           hotelId: hotel.id,
@@ -357,7 +411,7 @@ export async function POST() {
         },
       });
 
-      // Create sample reviews
+      // ── Create Reviews ───────────────────────────────────────────────────
       await tx.review.create({
         data: {
           hotelId: hotel.id, bookingId: bookings[2].id, guestId: guests[2].id,
@@ -375,7 +429,7 @@ export async function POST() {
         },
       });
 
-      // Create a sample invoice
+      // ── Create Invoice ───────────────────────────────────────────────────
       const invNum = `INV-${format(today, 'yyyy')}-${String(1).padStart(4, '0')}`;
       await tx.invoice.create({
         data: {
@@ -386,7 +440,7 @@ export async function POST() {
         },
       });
 
-      // Create sync log sample
+      // ── Create Sync Log ──────────────────────────────────────────────────
       await tx.syncLog.create({
         data: {
           hotelId: hotel.id,
@@ -400,15 +454,17 @@ export async function POST() {
         },
       });
 
-      return { user, hotel, hotelUser, channels, rooms, guests, bookings };
+      return { hotel, channels, rooms, guests, bookings, users: { adminUser, ownerUser, managerUser, staffUser, housekeepingUser } };
     });
 
-    const token = signJwt({
-      userId: result.user.id,
-      email: result.user.email,
-      name: result.user.name,
+    // Generate owner token for auto-login
+    const ownerToken = signJwt({
+      userId: result.users.ownerUser.id,
+      email: 'owner@easybeds.com',
+      name: 'John Owera',
       hotelId: result.hotel.id,
       role: 'owner',
+      platformRole: 'user',
     });
 
     return NextResponse.json(
@@ -416,8 +472,6 @@ export async function POST() {
         success: true,
         data: {
           message: 'Demo data created successfully!',
-          credentials: { email: 'demo@easybeds.com', password: 'demo123' },
-          token,
           hotel: { id: result.hotel.id, name: result.hotel.name, slug: result.hotel.slug },
           stats: {
             rooms: result.rooms.length,
@@ -425,6 +479,14 @@ export async function POST() {
             bookings: result.bookings.length,
             channels: result.channels.length,
           },
+          credentials: [
+            { email: 'admin@easybeds.com', password: 'admin123', platformRole: 'admin', hotelRole: 'N/A (sees all hotels)' },
+            { email: 'owner@easybeds.com', password: 'owner123', platformRole: 'user', hotelRole: 'owner' },
+            { email: 'manager@easybeds.com', password: 'manager123', platformRole: 'user', hotelRole: 'manager' },
+            { email: 'staff@easybeds.com', password: 'staff123', platformRole: 'user', hotelRole: 'staff' },
+            { email: 'housekeeping@easybeds.com', password: 'house123', platformRole: 'user', hotelRole: 'housekeeping' },
+          ],
+          token: ownerToken,
         },
       },
       { status: 201 }

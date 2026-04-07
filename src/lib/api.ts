@@ -296,6 +296,16 @@ export interface LoginResponse {
     slug: string
   }
   role: string
+  platformRole: string
+  allHotels?: Array<{
+    id: string
+    name: string
+    slug: string
+    city: string | null
+    country: string
+    plan: string
+    role: string
+  }>
 }
 
 export interface RegisterResponse {
@@ -380,6 +390,30 @@ export interface RegisterInput {
   address?: string
 }
 
+export interface HotelUserItem {
+  id: string
+  hotelId: string
+  userId: string
+  role: string
+  isActive: boolean
+  joinedAt: string
+  user: {
+    id: string
+    name: string
+    email: string
+    avatarUrl: string | null
+    role: string
+    createdAt: string
+  }
+}
+
+export interface AddHotelUserInput {
+  name: string
+  email: string
+  password?: string
+  role: 'owner' | 'manager' | 'staff' | 'housekeeping'
+}
+
 // =============================================================================
 // API Client Class
 // =============================================================================
@@ -446,6 +480,53 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  // ─── Hotel Users (Staff Management) ──────────────────────────────────────
+
+  async getHotelUsers(hotelId: string): Promise<ApiResponse<HotelUserItem[]>> {
+    return this.request<HotelUserItem[]>(
+      `/hotel/users?hotelId=${encodeURIComponent(hotelId)}`,
+    )
+  }
+
+  async addHotelUser(
+    hotelId: string,
+    data: AddHotelUserInput,
+  ): Promise<ApiResponse<{ message: string; user: { id: string; name: string; email: string; role: string }; defaultPassword?: string }>> {
+    return this.request(
+      `/hotel/users?hotelId=${encodeURIComponent(hotelId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async updateHotelUserRole(
+    hotelId: string,
+    userId: string,
+    data: { role?: string; isActive?: boolean },
+  ): Promise<ApiResponse<{ id: string; role: string; isActive: boolean }>> {
+    return this.request(
+      `/hotel/users?hotelId=${encodeURIComponent(hotelId)}&userId=${encodeURIComponent(userId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async removeHotelUser(
+    hotelId: string,
+    userId: string,
+  ): Promise<ApiResponse<{ message: string }>> {
+    return this.request(
+      `/hotel/users?hotelId=${encodeURIComponent(hotelId)}&userId=${encodeURIComponent(userId)}`,
+      {
+        method: 'DELETE',
+      },
+    )
   }
 
   // ─── Hotel ─────────────────────────────────────────────────────────────────

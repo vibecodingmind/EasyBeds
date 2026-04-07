@@ -8,7 +8,8 @@ interface JwtPayload {
   email: string;
   name: string;
   hotelId?: string;
-  role?: string;
+  role?: string;        // hotel-level role (owner, manager, staff, housekeeping)
+  platformRole?: string; // platform-level role (admin, user)
 }
 
 function base64UrlEncode(data: string): string {
