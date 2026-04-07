@@ -1015,7 +1015,7 @@ export default function BookingPage() {
                             <span className="text-sm font-medium text-emerald-700">{couponResult.code}</span>
                             <p className="text-xs text-emerald-600">
                               {couponResult.type === 'percentage' && `${couponResult.value}% discount`}
-                              {couponResult.type === 'fixed' && `${formatCurrency(couponResult.discount, cur)} off`}
+                              {couponResult.type === 'fixed' && `${formatCurrency(couponResult.discount ?? 0, cur)} off`}
                               {couponResult.type === 'free_nights' && `${couponResult.value} free night(s)`}
                               {couponResult.remainingUses !== null && couponResult.remainingUses !== undefined && (
                                 <span className="ml-1">({couponResult.remainingUses} remaining)</span>
@@ -1183,7 +1183,7 @@ export default function BookingPage() {
                                 Coupon &ldquo;{couponResult.code}&rdquo;
                               </span>
                               <span className="font-medium text-emerald-600">
-                                -{formatCurrency(couponResult.discount, cur)}
+                                -{formatCurrency(couponResult.discount ?? 0, cur)}
                               </span>
                             </div>
                           ) : null}
