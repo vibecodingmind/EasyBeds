@@ -169,7 +169,7 @@ function AmenityBadge({ amenity }: { amenity: string }) {
 
 export default function BookingPage() {
   // The slug comes from the URL path: /book/[slug]
-  const [slug, setSlug] = useState<string | null>(null)
+  const [slug, setSlug] = useState<string>('')
   const [hotel, setHotel] = useState<HotelData | null>(null)
   const [rooms, setRooms] = useState<RoomData[]>([])
   const [availableRooms, setAvailableRooms] = useState<RoomData[]>([])
