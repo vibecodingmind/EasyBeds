@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "bun install && bun run db:generate && bun run build"
 
 [deploy]
-startCommand = "sh -c 'npx prisma db push --accept-data-loss 2>&1; node .next/standalone/server.js'"
+startCommand = "node .next/standalone/server.js"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/"
