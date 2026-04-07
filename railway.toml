@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install -g bun && bun install && ./node_modules/.bin/prisma generate && bun run build"
+buildCommand = "bun install && bunx prisma generate && bun run build"
 
 [deploy]
 startCommand = "bunx prisma migrate deploy && bun .next/standalone/server.js"
