@@ -3,9 +3,7 @@ builder = "dockerfile"
 
 [deploy]
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
-healthcheckPath = "/"
-healthcheckTimeout = 300
+restartPolicyMaxRetries = 0
 
 [[services]]
 name = "easybeds"
