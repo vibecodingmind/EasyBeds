@@ -3,8 +3,8 @@ import { db } from '@/lib/db';
 import { verifyPassword, signJwt } from '@/lib/auth';
 
 // ── In-memory rate limiting ──────────────────────────────────────────────────
-// Max 5 login attempts per email per 15 minutes
-const RATE_LIMIT_MAX = 5;
+// Max 20 login attempts per email per 15 minutes
+const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 interface RateLimitEntry {
