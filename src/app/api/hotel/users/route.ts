@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { requireRole } from '@/lib/auth-middleware';
 
 // GET /api/hotel/users?hotelId=xxx — List all users for a hotel
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(request, ['owner']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     if (!hotelId) {
@@ -42,6 +46,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/hotel/users?hotelId=xxx — Add a user to hotel
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, ['owner']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     if (!hotelId) {
@@ -156,6 +163,9 @@ export async function POST(request: NextRequest) {
 
 // PATCH /api/hotel/users?hotelId=xxx — Update user role
 export async function PATCH(request: NextRequest) {
+  const auth = await requireRole(request, ['owner']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     const userId = request.nextUrl.searchParams.get('userId');
@@ -207,6 +217,9 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE /api/hotel/users?hotelId=xxx&userId=xxx — Remove user from hotel (deactivate)
 export async function DELETE(request: NextRequest) {
+  const auth = await requireRole(request, ['owner']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     const userId = request.nextUrl.searchParams.get('userId');

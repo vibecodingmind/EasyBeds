@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireRole } from '@/lib/auth-middleware';
 
 // GET /api/hotel?hotelId=xxx
 export async function GET(request: NextRequest) {
@@ -43,6 +44,9 @@ export async function GET(request: NextRequest) {
 
 // PUT /api/hotel?hotelId=xxx
 export async function PUT(request: NextRequest) {
+  const auth = await requireRole(request, ['owner', 'manager']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     if (!hotelId) {

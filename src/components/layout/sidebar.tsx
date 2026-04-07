@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useAppStore, type ViewType } from '@/lib/store'
+import { canAccessView } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 
 interface NavSection {
@@ -81,6 +82,7 @@ export function AppSidebar() {
   const {
     currentUser,
     userRole,
+    platformRole,
     hotel,
     currentView,
     sidebarOpen,
@@ -147,59 +149,68 @@ export function AppSidebar() {
         {/* Navigation */}
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="flex flex-col gap-4">
-            {navSections.map((section) => (
-              <div key={section.label}>
-                {sidebarOpen && (
-                  <div className="mb-1 px-3">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {section.label}
-                    </span>
-                  </div>
-                )}
-                <div className="flex flex-col gap-0.5">
-                  {section.items.map((item) => {
-                    const isActive = currentView === item.view
-                    const Icon = item.icon
+            {navSections.map((section) => {
+              // Filter items based on permissions
+              const visibleItems = section.items.filter(item =>
+                canAccessView(userRole, platformRole, item.view)
+              )
+              // Skip section if no items visible
+              if (visibleItems.length === 0) return null
 
-                    if (!sidebarOpen) {
+              return (
+                <div key={section.label}>
+                  {sidebarOpen && (
+                    <div className="mb-1 px-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {section.label}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    {visibleItems.map((item) => {
+                      const isActive = currentView === item.view
+                      const Icon = item.icon
+
+                      if (!sidebarOpen) {
+                        return (
+                          <Tooltip key={item.view} delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={isActive ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="w-full"
+                                onClick={() => navigate(item.view)}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={8}>
+                              {item.label}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      }
+
                       return (
-                        <Tooltip key={item.view} delayDuration={0}>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant={isActive ? 'secondary' : 'ghost'}
-                              size="icon"
-                              className="w-full"
-                              onClick={() => navigate(item.view)}
-                            >
-                              <Icon className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" sideOffset={8}>
-                            {item.label}
-                          </TooltipContent>
-                        </Tooltip>
+                        <Button
+                          key={item.view}
+                          variant={isActive ? 'secondary' : 'ghost'}
+                          className={cn(
+                            'w-full justify-start gap-3 px-3',
+                            isActive &&
+                              'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
+                          )}
+                          onClick={() => navigate(item.view)}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="text-sm">{item.label}</span>
+                        </Button>
                       )
-                    }
-
-                    return (
-                      <Button
-                        key={item.view}
-                        variant={isActive ? 'secondary' : 'ghost'}
-                        className={cn(
-                          'w-full justify-start gap-3 px-3',
-                          isActive &&
-                            'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
-                        )}
-                        onClick={() => navigate(item.view)}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="text-sm">{item.label}</span>
-                      </Button>
-                    )
-                  })}
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {/* Settings at bottom */}
             {sidebarOpen && (
@@ -212,6 +223,7 @@ export function AppSidebar() {
             {(() => {
               const isActive = currentView === 'settings'
               const Icon = Settings
+              if (!canAccessView(userRole, platformRole, 'settings')) return null
               if (!sidebarOpen) {
                 return (
                   <Tooltip delayDuration={0}>

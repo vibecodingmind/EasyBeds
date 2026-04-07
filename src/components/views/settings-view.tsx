@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/lib/store'
+import { canManageStaff, canAccessSettings, type HotelRole, type PlatformRole } from '@/lib/permissions'
 import { api, type HotelUserItem } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -726,7 +727,7 @@ function StaffManager({ hotelId }: { hotelId: string }) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function SettingsView() {
-  const { hotel, fetchHotel, currentHotelId, loading } = useAppStore()
+  const { hotel, fetchHotel, currentHotelId, loading, userRole, platformRole } = useAppStore()
   const [saving, setSaving] = useState(false)
 
   const [hotelSettings, setHotelSettings] = useState({
@@ -793,6 +794,20 @@ export function SettingsView() {
 
   if (!currentHotelId) return null
 
+  if (!canAccessSettings(userRole as HotelRole | null, platformRole as PlatformRole | null)) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <div className="text-center">
+          <ShieldAlert className="mx-auto h-12 w-12 text-muted-foreground/40" />
+          <h2 className="mt-4 text-lg font-semibold">Access Denied</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You don&apos;t have permission to access hotel settings.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const currentPlan = (hotel?.plan || 'free') as PlanKey
 
   return (
@@ -813,7 +828,9 @@ export function SettingsView() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
           <TabsTrigger value="cancellation">Cancellation</TabsTrigger>
-          <TabsTrigger value="staff">Staff</TabsTrigger>
+          {canManageStaff(userRole as HotelRole | null, platformRole as PlatformRole | null) && (
+            <TabsTrigger value="staff">Staff</TabsTrigger>
+          )}
           <TabsTrigger value="plan">Plan</TabsTrigger>
         </TabsList>
 
@@ -1128,9 +1145,11 @@ export function SettingsView() {
         </TabsContent>
 
         {/* ─── Staff Management ────────────────────────────────────────── */}
-        <TabsContent value="staff">
-          <StaffManager hotelId={currentHotelId} />
-        </TabsContent>
+        {canManageStaff(userRole as HotelRole | null, platformRole as PlatformRole | null) && (
+          <TabsContent value="staff">
+            <StaffManager hotelId={currentHotelId} />
+          </TabsContent>
+        )}
 
         {/* ─── Plan ─────────────────────────────────────────────────────── */}
         <TabsContent value="plan">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireRole } from '@/lib/auth-middleware';
 
 // PATCH /api/cancellation-policies/:id?hotelId=xxx — Update policy
 export async function PATCH(
@@ -76,6 +77,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, ['owner', 'manager']);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
     const hotelId = request.nextUrl.searchParams.get('hotelId');

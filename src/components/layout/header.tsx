@@ -34,7 +34,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
 import { api, type NotificationItem } from '@/lib/api'
 import { timeAgo } from '@/lib/time-ago'
@@ -381,6 +382,8 @@ export function AppHeader() {
     logout,
     currentUser,
     hotel,
+    navigate,
+    userRole,
   } = useAppStore()
 
   const initials = currentUser?.name
@@ -435,24 +438,38 @@ export function AppHeader() {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">
             <Avatar className="h-9 w-9">
+              {currentUser?.avatarUrl && (
+                <AvatarImage src={currentUser.avatarUrl} alt={currentUser?.name || 'User'} />
+              )}
               <AvatarFallback className="bg-emerald-100 text-sm text-emerald-700">
                 {initials}
               </AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium">{currentUser?.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">{currentUser?.name}</p>
+                {userRole && (
+                  <Badge variant="outline" className="ml-auto text-[10px] font-normal capitalize">
+                    {userRole}
+                  </Badge>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {currentUser?.email}
               </p>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Profile</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('settings')}>
+            Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('settings')}>
+            Settings
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive" onClick={logout}>
             Log out

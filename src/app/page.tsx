@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
+import { canAccessView, getDefaultView } from '@/lib/permissions'
 import { initRouter, getViewTitle } from '@/lib/router'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -963,7 +964,7 @@ function LandingPage() {
 /*  VIEW RENDERER (authenticated dashboard)                                   */
 /* -------------------------------------------------------------------------- */
 function ViewRenderer() {
-  const { currentView } = useAppStore()
+  const { currentView, userRole, platformRole, isAuthenticated } = useAppStore()
 
   // Initialise hash-based router and sync document title
   useEffect(() => {
@@ -978,6 +979,15 @@ function ViewRenderer() {
   useEffect(() => {
     document.title = getViewTitle(currentView)
   }, [currentView])
+
+  // Redirect if user doesn't have permission for current view
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (!canAccessView(userRole, platformRole, currentView)) {
+      const defaultView = getDefaultView(userRole, platformRole)
+      useAppStore.getState().navigate(defaultView)
+    }
+  }, [currentView, userRole, platformRole, isAuthenticated])
 
   const viewComponents: Record<string, React.ReactNode> = {
     dashboard: <DashboardView />,
@@ -999,6 +1009,8 @@ function ViewRenderer() {
     reviews: <ReviewsView />,
   }
 
+  const hasAccess = canAccessView(userRole, platformRole, currentView)
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -1009,7 +1021,19 @@ function ViewRenderer() {
         transition={{ duration: 0.15 }}
         className="flex-1 overflow-auto"
       >
-        {viewComponents[currentView] || <DashboardView />}
+        {!hasAccess ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <Shield className="mx-auto h-12 w-12 text-muted-foreground/40" />
+              <h2 className="mt-4 text-lg font-semibold">Access Denied</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You don&apos;t have permission to view this page.
+              </p>
+            </div>
+          </div>
+        ) : (
+          viewComponents[currentView] || <DashboardView />
+        )}
       </motion.div>
     </AnimatePresence>
   )
