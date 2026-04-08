@@ -124,7 +124,7 @@ function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => vo
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="border-t border-white/10 bg-gray-950/95 backdrop-blur-2xl px-4 pb-4 pt-2 md:hidden">
+        <div className="border-t border-white/10 bg-gray-900/95 px-4 pb-4 pt-2 md:hidden">
           {links.map((link) => (
             <a
               key={link.href}
@@ -170,13 +170,13 @@ function HeroSection({ onSignup, onLogin }: { onSignup: () => void; onLogin: () 
           backgroundSize: '60px 60px'
         }} />
         {/* Aurora orb 1 */}
-        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-emerald-500/15 blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-emerald-500/15 blur-[60px] animate-pulse" style={{ animationDuration: '8s' }} />
         {/* Aurora orb 2 */}
-        <div className="absolute top-1/4 right-0 h-[600px] w-[400px] rounded-full bg-teal-400/10 blur-[100px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
+        <div className="absolute top-1/4 right-0 h-[600px] w-[400px] rounded-full bg-teal-400/10 blur-[50px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
         {/* Aurora orb 3 */}
-        <div className="absolute bottom-0 left-1/3 h-[500px] w-[500px] rounded-full bg-emerald-600/10 blur-[130px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '4s' }} />
+        <div className="absolute bottom-0 left-1/3 h-[500px] w-[500px] rounded-full bg-emerald-600/10 blur-[60px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '4s' }} />
         {/* Aurora orb 4 - teal accent */}
-        <div className="absolute top-1/2 right-1/4 h-[300px] w-[300px] rounded-full bg-cyan-400/8 blur-[80px] animate-pulse" style={{ animationDuration: '7s', animationDelay: '1s' }} />
+        <div className="absolute top-1/2 right-1/4 h-[300px] w-[300px] rounded-full bg-cyan-400/8 blur-[40px] animate-pulse" style={{ animationDuration: '7s', animationDelay: '1s' }} />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-4 pt-16 text-center sm:px-6 lg:px-8">
@@ -322,8 +322,8 @@ function FeaturesSection() {
     <section id="features" className="relative overflow-hidden bg-gray-950/50 py-24 sm:py-32">
       {/* Background effects */}
       <div className="absolute inset-0">
-        <div className="absolute top-0 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[120px] animate-pulse" style={{ animationDuration: '9s' }} />
-        <div className="absolute bottom-0 right-1/4 h-[300px] w-[300px] rounded-full bg-teal-400/5 blur-[100px] animate-pulse" style={{ animationDuration: '7s', animationDelay: '3s' }} />
+        <div className="absolute top-0 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-500/5 blur-[50px] animate-pulse" style={{ animationDuration: '9s' }} />
+        <div className="absolute bottom-0 right-1/4 h-[300px] w-[300px] rounded-full bg-teal-400/5 blur-[50px] animate-pulse" style={{ animationDuration: '7s', animationDelay: '3s' }} />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -496,7 +496,7 @@ function PricingSection() {
     <section id="pricing" className="relative overflow-hidden bg-gray-950/70 py-24 sm:py-32">
       {/* Background glow for popular card */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="h-[400px] w-[600px] rounded-full bg-emerald-500/8 blur-[150px]" />
+        <div className="h-[400px] w-[600px] rounded-full bg-emerald-500/8 blur-[60px]" />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -651,8 +651,8 @@ function CTASection({ onSignup }: { onSignup: () => void }) {
       {/* Animated gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-teal-900 to-emerald-950" />
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-20 -left-20 h-[400px] w-[400px] rounded-full bg-emerald-500/20 blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute -bottom-20 -right-20 h-[500px] w-[400px] rounded-full bg-teal-400/15 blur-[100px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '3s' }} />
+        <div className="absolute -top-20 -left-20 h-[400px] w-[400px] rounded-full bg-emerald-500/20 blur-[50px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute -bottom-20 -right-20 h-[500px] w-[400px] rounded-full bg-teal-400/15 blur-[50px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '3s' }} />
       </div>
       {/* Grid overlay */}
       <div className="absolute inset-0 opacity-[0.03]" style={{
@@ -832,13 +832,13 @@ function AuthModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.2 }}
-        className="relative mx-4 w-full max-w-md rounded-2xl border border-white/20 bg-gray-900/90 p-8 shadow-2xl shadow-black/40 backdrop-blur-2xl"
+        className="relative mx-4 w-full max-w-md rounded-2xl border border-white/20 bg-gray-900/90 p-8 shadow-2xl shadow-black/40"
       >
         {/* Close */}
         <button

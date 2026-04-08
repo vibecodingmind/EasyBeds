@@ -86,6 +86,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Auto-seed fallback: if database is empty, seed it first ───────────
+    const userCount = await db.user.count();
+    if (userCount === 0) {
+      console.warn('[login] Database is empty — auto-seeding...');
+      try {
+        const seedRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/seed`, {
+          method: 'POST',
+        });
+        if (!seedRes.ok) console.error('[login] Auto-seed failed:', seedRes.status);
+      } catch (e) {
+        console.error('[login] Auto-seed fetch failed:', e);
+      }
+    }
+
     const user = await db.user.findUnique({
       where: { email },
       include: {
