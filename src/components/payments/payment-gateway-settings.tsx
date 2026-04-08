@@ -164,7 +164,7 @@ export function PaymentGatewaySettings({ hotelId }: { hotelId: string }) {
     },
   ]
 
-  const activeGw = gateways.find((g) => g.type === activeGateway)!
+  const activeGw = gateways.find((g) => g.type === activeGateway) ?? gateways[0]
 
   return (
     <div className="space-y-6 max-w-2xl">
