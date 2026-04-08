@@ -23,6 +23,8 @@ const HASH_TO_VIEW: Record<string, ViewType> = {
   'night-audit': 'night_audit',
   activity: 'activity',
   settings: 'settings',
+  subscription: 'subscription',
+  admin: 'admin',
   // Legacy / alias support (underscore variants in URL)
   night_audit: 'night_audit',
   rate_parity: 'rate-parity',
@@ -46,6 +48,8 @@ const VIEW_TO_HASH: Record<ViewType, string> = {
   night_audit: 'night-audit',
   activity: 'activity',
   settings: 'settings',
+  subscription: 'subscription',
+  admin: 'admin',
 }
 
 // ─── Document titles ─────────────────────────────────────────────────────
@@ -68,6 +72,8 @@ const VIEW_TITLES: Record<ViewType, string> = {
   night_audit: 'Night Audit — EasyBeds',
   activity: 'Activity Log — EasyBeds',
   settings: 'Settings — EasyBeds',
+  subscription: 'Subscription & Billing — EasyBeds',
+  admin: 'Platform Admin — EasyBeds',
 }
 
 // ─── Public helpers ──────────────────────────────────────────────────────

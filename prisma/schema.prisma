@@ -49,6 +49,11 @@ model Hotel {
   // Loyalty
   loyaltyEnabled     Boolean  @default(false)
   loyaltyPointsPerCurrency  Float  @default(1.0) // e.g. 1 point per TZS spent
+  // Payment gateway configuration (JSON strings for each gateway)
+  paymentGateway    String   @default("cash") // "stripe", "pesapal", "paypal", "cash"
+  stripeConfig      String?  // JSON: { publicKey, secretKey, webhookSecret }
+  pesapalConfig     String?  // JSON: { consumerKey, consumerSecret, apiKey, isLive }
+  paypalConfig      String?  // JSON: { clientId, clientSecret, isLive }
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -72,6 +77,7 @@ model Hotel {
   guestMessages       GuestMessage[]
   reviews             Review[]
   nightAudits         NightAudit[]
+  subscription        Subscription?
 
   @@index([slug])
   @@index([plan])
@@ -445,6 +451,9 @@ enum PaymentMethod {
   mobile_money
   online
   waiver
+  stripe
+  pesapal
+  paypal
 }
 
 model Payment {
@@ -911,4 +920,87 @@ model NightAudit {
   @@index([hotelId])
   @@index([auditDate])
   @@unique([hotelId, auditDate])
+}
+
+// ============================================
+// SUBSCRIPTION PLANS (Platform-level)
+// ============================================
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String   // "Free", "Starter", "Pro", "Enterprise"
+  slug            String   @unique
+  priceMonthly    Float    @default(0)
+  priceYearly     Float    @default(0)
+  maxRooms        Int      @default(5)
+  maxChannels     Int      @default(0)
+  maxUsers        Int      @default(1)
+  features        String?  // JSON array of feature strings
+  stripePriceId   String?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions   Subscription[]
+}
+
+// ============================================
+// SUBSCRIPTIONS (Hotel subscriptions)
+// ============================================
+
+model Subscription {
+  id                String             @id @default(cuid())
+  hotelId           String             @unique
+  planId            String
+  status            String             @default("active") // active, past_due, cancelled, trialing, paused
+  billingInterval   String             @default("monthly") // monthly, yearly
+  currentPeriodEnd  DateTime?
+  trialEndsAt       DateTime?
+  cancelledAt       DateTime?
+  stripeSubscriptionId String?
+  paypalSubscriptionId String?
+  amount            Float
+  currency          String             @default("USD")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  hotel             Hotel              @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  plan              SubscriptionPlan   @relation(fields: [planId], references: [id])
+
+  @@index([hotelId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+// ============================================
+// PLATFORM SETTINGS (Global config)
+// ============================================
+
+model PlatformSettings {
+  id                String   @id @default(cuid())
+  key               String   @unique
+  value             String?  // JSON or string value
+  description       String?
+  updatedAt         DateTime @updatedAt
+}
+
+// ============================================
+// PLATFORM AUDIT LOG (Admin actions)
+// ============================================
+
+model PlatformAuditLog {
+  id            String   @id @default(cuid())
+  adminUserId   String?
+  action        String
+  entityType    String?  // "hotel", "user", "subscription", "plan"
+  entityId      String?
+  details       String?  // JSON
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
 }

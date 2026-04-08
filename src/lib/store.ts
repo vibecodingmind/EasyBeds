@@ -35,6 +35,8 @@ export type ViewType =
   | 'activity'
   | 'night_audit'
   | 'settings'
+  | 'subscription'
+  | 'admin'
 
 export type { ApiBooking } from './api'
 export type BookingStatus = ApiBooking['status']

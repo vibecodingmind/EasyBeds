@@ -10,6 +10,7 @@ import {
   Radio,
   BarChart3,
   Settings,
+  CreditCard,
   LogOut,
   Hotel,
   ChevronLeft,
@@ -21,6 +22,7 @@ import {
   Scale,
   PlusCircle,
   Moon,
+  Shield,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -111,22 +113,22 @@ export function AppSidebar() {
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-full flex-col border-r bg-card transition-all duration-300',
+          'fixed left-0 top-0 z-50 flex h-full flex-col border-r bg-gray-900/80 backdrop-blur-xl transition-all duration-300 border-white/10',
           sidebarOpen ? 'w-64' : 'w-0 md:w-16',
           'md:relative md:z-auto',
         )}
       >
         {/* Brand */}
-        <div className="flex h-16 items-center gap-3 border-b px-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+        <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-lg shadow-emerald-600/25">
             <Hotel className="h-5 w-5" />
           </div>
           {sidebarOpen && (
             <div className="flex flex-col overflow-hidden">
-              <span className="text-sm font-bold tracking-tight text-foreground">
+              <span className="text-sm font-bold tracking-tight text-white">
                 EasyBeds
               </span>
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span className="truncate text-[11px] text-white/50">
                 {hotelName}
               </span>
             </div>
@@ -134,7 +136,7 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto hidden h-8 w-8 md:flex"
+            className="ml-auto hidden h-8 w-8 text-white/50 hover:text-white hover:bg-white/10 md:flex"
             onClick={toggleSidebar}
           >
             <ChevronLeft
@@ -149,6 +151,57 @@ export function AppSidebar() {
         {/* Navigation */}
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="flex flex-col gap-4">
+            {/* Platform Admin - only for platform admins */}
+            {platformRole === 'admin' && (
+              <div>
+                {sidebarOpen && (
+                  <div className="mb-1 px-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                      Platform
+                    </span>
+                  </div>
+                )}
+                <div className="flex flex-col gap-0.5">
+                  {(() => {
+                    const isActive = currentView === 'admin'
+                    const Icon = Shield
+                    if (!sidebarOpen) {
+                      return (
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={isActive ? 'secondary' : 'ghost'}
+                              size="icon"
+                              className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                              onClick={() => navigate('admin')}
+                            >
+                              <Icon className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={8}>
+                            Platform Admin
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    }
+                    return (
+                      <Button
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        className={cn(
+                          'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                          isActive &&
+                            'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
+                        )}
+                        onClick={() => navigate('admin')}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="text-sm">Platform Admin</span>
+                      </Button>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
             {navSections.map((section) => {
               // Filter items based on permissions
               const visibleItems = section.items.filter(item =>
@@ -161,7 +214,7 @@ export function AppSidebar() {
                 <div key={section.label}>
                   {sidebarOpen && (
                     <div className="mb-1 px-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
                         {section.label}
                       </span>
                     </div>
@@ -178,7 +231,7 @@ export function AppSidebar() {
                               <Button
                                 variant={isActive ? 'secondary' : 'ghost'}
                                 size="icon"
-                                className="w-full"
+                                className="w-full text-white/70 hover:text-white hover:bg-white/10"
                                 onClick={() => navigate(item.view)}
                               >
                                 <Icon className="h-4 w-4" />
@@ -196,9 +249,9 @@ export function AppSidebar() {
                           key={item.view}
                           variant={isActive ? 'secondary' : 'ghost'}
                           className={cn(
-                            'w-full justify-start gap-3 px-3',
+                            'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
                             isActive &&
-                              'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
+                              'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                           )}
                           onClick={() => navigate(item.view)}
                         >
@@ -215,11 +268,46 @@ export function AppSidebar() {
             {/* Settings at bottom */}
             {sidebarOpen && (
               <div className="mb-1 px-3">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
                   System
                 </span>
               </div>
             )}
+            {(() => {
+              const isActive = currentView === 'subscription'
+              const Icon = CreditCard
+              if (!canAccessView(userRole, platformRole, 'subscription')) return null
+              if (!sidebarOpen) {
+                return (
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        size="icon"
+                        className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                        onClick={() => navigate('subscription')}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>Subscription</TooltipContent>
+                  </Tooltip>
+                )
+              }
+              return (
+                <Button
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  className={cn(
+                    'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                    isActive && 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
+                  )}
+                  onClick={() => navigate('subscription')}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">Subscription</span>
+                </Button>
+              )
+            })()}
             {(() => {
               const isActive = currentView === 'settings'
               const Icon = Settings
@@ -231,7 +319,7 @@ export function AppSidebar() {
                       <Button
                         variant={isActive ? 'secondary' : 'ghost'}
                         size="icon"
-                        className="w-full"
+                        className="w-full text-white/70 hover:text-white hover:bg-white/10"
                         onClick={() => navigate('settings')}
                       >
                         <Icon className="h-4 w-4" />
@@ -247,9 +335,9 @@ export function AppSidebar() {
                 <Button
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={cn(
-                    'w-full justify-start gap-3 px-3',
+                    'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
                     isActive &&
-                      'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700',
+                      'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                   )}
                   onClick={() => navigate('settings')}
                 >
@@ -262,27 +350,27 @@ export function AppSidebar() {
         </ScrollArea>
 
         {/* User section */}
-        <Separator />
+        <Separator className="bg-white/10" />
         <div className="p-3">
           {sidebarOpen ? (
-            <div className="flex items-center gap-3 rounded-lg p-2">
+            <div className="flex items-center gap-3 rounded-xl p-2">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-emerald-100 text-xs text-emerald-700">
+                <AvatarFallback className="bg-emerald-500/20 border border-emerald-500/30 text-xs text-emerald-400">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium">
+                <span className="truncate text-sm font-medium text-white">
                   {currentUser?.name}
                 </span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs text-white/50">
                   {userRole || 'Staff'}
                 </span>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                className="h-8 w-8 text-white/40 hover:text-red-400 hover:bg-white/10"
                 onClick={logout}
               >
                 <LogOut className="h-4 w-4" />
@@ -294,7 +382,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="w-full text-muted-foreground hover:text-destructive"
+                  className="w-full text-white/40 hover:text-red-400 hover:bg-white/10"
                   onClick={logout}
                 >
                   <LogOut className="h-4 w-4" />

@@ -60,6 +60,7 @@ export async function PUT(request: NextRequest) {
     const {
       name, description, address, city, country, phone, email, website,
       logoUrl, timezone, checkInTime, checkOutTime, currency,
+      paymentGateway, stripeConfig, pesapalConfig, paypalConfig,
     } = body;
 
     const hotel = await db.hotel.update({
@@ -78,6 +79,10 @@ export async function PUT(request: NextRequest) {
         ...(checkInTime !== undefined && { checkInTime }),
         ...(checkOutTime !== undefined && { checkOutTime }),
         ...(currency !== undefined && { currency }),
+        ...(paymentGateway !== undefined && { paymentGateway }),
+        ...(stripeConfig !== undefined && { stripeConfig }),
+        ...(pesapalConfig !== undefined && { pesapalConfig }),
+        ...(paypalConfig !== undefined && { paypalConfig }),
       },
     });
 

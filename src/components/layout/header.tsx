@@ -58,17 +58,17 @@ const NOTIFICATION_ICONS: Record<string, React.ElementType> = {
 }
 
 const NOTIFICATION_COLORS: Record<string, string> = {
-  booking_confirmation: 'text-emerald-600 bg-emerald-50',
-  booking_reminder: 'text-emerald-600 bg-emerald-50',
-  pre_arrival: 'text-blue-600 bg-blue-50',
-  post_checkout: 'text-slate-600 bg-slate-50',
-  payment_receipt: 'text-amber-600 bg-amber-50',
-  review_request: 'text-purple-600 bg-purple-50',
-  cancellation: 'text-red-600 bg-red-50',
-  low_balance: 'text-orange-600 bg-orange-50',
-  housekeeping_alert: 'text-amber-600 bg-amber-50',
-  system_alert: 'text-slate-600 bg-slate-50',
-  custom: 'text-slate-600 bg-slate-50',
+  booking_confirmation: 'text-emerald-400 bg-emerald-500/15',
+  booking_reminder: 'text-emerald-400 bg-emerald-500/15',
+  pre_arrival: 'text-cyan-400 bg-cyan-500/15',
+  post_checkout: 'text-slate-400 bg-slate-500/15',
+  payment_receipt: 'text-amber-400 bg-amber-500/15',
+  review_request: 'text-purple-400 bg-purple-500/15',
+  cancellation: 'text-red-400 bg-red-500/15',
+  low_balance: 'text-orange-400 bg-orange-500/15',
+  housekeeping_alert: 'text-amber-400 bg-amber-500/15',
+  system_alert: 'text-slate-400 bg-slate-500/15',
+  custom: 'text-slate-400 bg-slate-500/15',
 }
 
 // ─── Human-readable type labels ──────────────────────────────────────────
@@ -222,10 +222,10 @@ function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+        <Button variant="ghost" size="icon" className="relative text-white/70 hover:text-white hover:bg-white/10" aria-label="Notifications">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -234,7 +234,7 @@ function NotificationBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-80 p-0 sm:w-96"
+        className="w-80 border-white/10 bg-gray-900/95 backdrop-blur-xl p-0 sm:w-96"
       >
         <AnimatePresence mode="wait">
           {loading && notifications.length === 0 ? (
@@ -246,8 +246,8 @@ function NotificationBell() {
               transition={{ duration: 0.15 }}
               className="flex flex-col items-center justify-center gap-2 px-4 py-10"
             >
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Loading notifications…</p>
+              <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+              <p className="text-sm text-white/40">Loading notifications…</p>
             </motion.div>
           ) : (
             <motion.div
@@ -258,13 +258,13 @@ function NotificationBell() {
               transition={{ duration: 0.15 }}
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                <h3 className="text-sm font-semibold">Notifications</h3>
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <h3 className="text-sm font-semibold text-white">Notifications</h3>
                 {unreadCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto gap-1.5 px-2 py-1 text-xs text-emerald-600 hover:text-emerald-700"
+                    className="h-auto gap-1.5 px-2 py-1 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-white/10"
                     onClick={handleMarkAllRead}
                     disabled={markingAll}
                   >
@@ -281,9 +281,9 @@ function NotificationBell() {
               {/* Notification List */}
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-4 py-10">
-                  <Bell className="h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-sm font-medium text-muted-foreground">No new notifications</p>
-                  <p className="text-xs text-muted-foreground/70">
+                  <Bell className="h-8 w-8 text-white/20" />
+                  <p className="text-sm font-medium text-white/40">No new notifications</p>
+                  <p className="text-xs text-white/30">
                     We&apos;ll let you know when something arrives
                   </p>
                 </div>
@@ -293,7 +293,7 @@ function NotificationBell() {
                     {notifications.map((notification, index) => {
                       const Icon = NOTIFICATION_ICONS[notification.type] || Bell
                       const colorClass =
-                        NOTIFICATION_COLORS[notification.type] || 'text-slate-600 bg-slate-50'
+                        NOTIFICATION_COLORS[notification.type] || 'text-slate-400 bg-slate-500/15'
                       const ChannelIcon = getChannelIcon(notification.channel)
                       const title = getNotificationTitle(notification)
                       const description = getNotificationDescription(notification)
@@ -306,8 +306,8 @@ function NotificationBell() {
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.03, duration: 0.2 }}
                           onClick={() => setOpen(false)}
-                          className={`flex w-full items-start gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50 ${
-                            unread ? 'bg-emerald-50/60' : ''
+                          className={`flex w-full items-start gap-3 border-b border-white/10 px-4 py-3 text-left transition-colors hover:bg-white/10 ${
+                            unread ? 'bg-emerald-500/5' : ''
                           }`}
                         >
                           {/* Type icon */}
@@ -322,7 +322,7 @@ function NotificationBell() {
                             <div className="flex items-start justify-between gap-2">
                               <p
                                 className={`text-sm leading-snug ${
-                                  unread ? 'font-semibold' : 'font-medium'
+                                  unread ? 'font-semibold text-white' : 'font-medium text-white/70'
                                 }`}
                               >
                                 {title}
@@ -332,11 +332,11 @@ function NotificationBell() {
                               )}
                             </div>
                             {description && (
-                              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                              <p className="mt-0.5 line-clamp-2 text-xs text-white/50">
                                 {description}
                               </p>
                             )}
-                            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground/70">
+                            <div className="mt-1 flex items-center gap-2 text-[11px] text-white/30">
                               <ChannelIcon className="h-3 w-3" />
                               <span>{timeAgo(notification.createdAt)}</span>
                             </div>
@@ -350,11 +350,11 @@ function NotificationBell() {
 
               {/* Footer */}
               {notifications.length > 0 && (
-                <div className="border-t px-4 py-2.5">
+                <div className="border-t border-white/10 px-4 py-2.5">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full text-xs text-emerald-600 hover:text-emerald-700"
+                    className="w-full text-xs text-emerald-400 hover:text-emerald-300 hover:bg-white/10"
                     onClick={() => {
                       setOpen(false)
                       navigate('activity')
@@ -395,12 +395,12 @@ export function AppHeader() {
   const hotelName = hotel?.name || 'EasyBeds'
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-white/10 bg-gray-900/60 backdrop-blur-xl px-4 md:px-6">
       {/* Mobile menu */}
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden"
+        className="md:hidden text-white/70 hover:text-white hover:bg-white/10"
         onClick={toggleSidebar}
       >
         <Menu className="h-5 w-5" />
@@ -408,18 +408,21 @@ export function AppHeader() {
 
       {/* Title */}
       <div className="flex-1">
-        <h1 className="text-lg font-semibold tracking-tight">
+        <h1 className="text-lg font-semibold tracking-tight text-white">
           {viewTitles[currentView] || 'Dashboard'}
         </h1>
-        <p className="hidden text-xs text-muted-foreground sm:block">
+        <p className="hidden text-xs text-white/50 sm:block">
           {hotelName}
         </p>
       </div>
 
       {/* Search */}
       <div className="relative hidden md:block">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search bookings, guests..." className="w-64 pl-9" />
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-white/30" />
+        <Input
+          placeholder="Search bookings, guests..."
+          className="w-64 border-white/10 bg-white/5 pl-9 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:ring-emerald-500/20"
+        />
       </div>
 
       {/* Notifications */}
@@ -427,7 +430,7 @@ export function AppHeader() {
 
       {/* New booking quick action */}
       <Button
-        className="hidden bg-emerald-600 hover:bg-emerald-700 sm:flex"
+        className="hidden bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/20 sm:flex border-0"
         onClick={() => setShowNewBookingDialog(true)}
       >
         + New Booking
@@ -436,42 +439,42 @@ export function AppHeader() {
       {/* User */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+          <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-white/10">
             <Avatar className="h-9 w-9">
               {currentUser?.avatarUrl && (
                 <AvatarImage src={currentUser.avatarUrl} alt={currentUser?.name || 'User'} />
               )}
-              <AvatarFallback className="bg-emerald-100 text-sm text-emerald-700">
+              <AvatarFallback className="bg-emerald-500/20 border border-emerald-500/30 text-sm text-emerald-400">
                 {initials}
               </AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="font-normal">
+        <DropdownMenuContent align="end" className="w-56 border-white/10 bg-gray-900/95 backdrop-blur-xl">
+          <DropdownMenuLabel className="font-normal text-white">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium">{currentUser?.name}</p>
+                <p className="text-sm font-medium text-white">{currentUser?.name}</p>
                 {userRole && (
-                  <Badge variant="outline" className="ml-auto text-[10px] font-normal capitalize">
+                  <Badge variant="outline" className="ml-auto border-emerald-500/30 bg-emerald-500/10 text-[10px] font-normal capitalize text-emerald-400">
                     {userRole}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-white/50">
                 {currentUser?.email}
               </p>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate('settings')}>
+          <DropdownMenuSeparator className="bg-white/10" />
+          <DropdownMenuItem onClick={() => navigate('settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
             Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => navigate('settings')}>
+          <DropdownMenuItem onClick={() => navigate('settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
             Settings
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive" onClick={logout}>
+          <DropdownMenuSeparator className="bg-white/10" />
+          <DropdownMenuItem className="text-red-400 hover:text-red-300 hover:bg-white/10 focus:text-red-300 focus:bg-white/10" onClick={logout}>
             Log out
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -30,6 +30,7 @@ const ROLE_VIEWS: Record<HotelRole, ViewType[]> = {
     'loyalty',
     'settings',
     'reports',
+    'subscription',
   ],
   manager: [
     'dashboard',
@@ -49,6 +50,7 @@ const ROLE_VIEWS: Record<HotelRole, ViewType[]> = {
     'loyalty',
     'settings',
     'reports',
+    'subscription',
   ],
   staff: [
     'dashboard',
@@ -154,9 +156,9 @@ export function getAccessibleViews(
   role: HotelRole | null,
   platformRole: PlatformRole | null,
 ): ViewType[] {
-  // Platform admins see everything
+  // Platform admins see everything including admin panel
   if (platformRole === 'admin') {
-    return ROLE_VIEWS.owner
+    return [...ROLE_VIEWS.owner, 'admin']
   }
 
   if (!role) return []

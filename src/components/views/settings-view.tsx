@@ -19,6 +19,7 @@ import {
   Edit3,
   Loader2,
   Info,
+  CreditCard,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,6 +53,7 @@ import { canManageStaff, canAccessSettings, type HotelRole, type PlatformRole } 
 import { api, type HotelUserItem } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { PaymentGatewaySettings } from '@/components/payments/payment-gateway-settings'
 
 // ─── Timezone Options ────────────────────────────────────────────────────────
 
@@ -831,6 +833,10 @@ export function SettingsView() {
           {canManageStaff(userRole as HotelRole | null, platformRole as PlatformRole | null) && (
             <TabsTrigger value="staff">Staff</TabsTrigger>
           )}
+          <TabsTrigger value="payments">
+            <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+            Payments
+          </TabsTrigger>
           <TabsTrigger value="plan">Plan</TabsTrigger>
         </TabsList>
 
@@ -1150,6 +1156,11 @@ export function SettingsView() {
             <StaffManager hotelId={currentHotelId} />
           </TabsContent>
         )}
+
+        {/* ─── Payments ────────────────────────────────────────────────── */}
+        <TabsContent value="payments">
+          <PaymentGatewaySettings hotelId={currentHotelId} />
+        </TabsContent>
 
         {/* ─── Plan ─────────────────────────────────────────────────────── */}
         <TabsContent value="plan">
