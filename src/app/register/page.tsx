@@ -87,7 +87,7 @@ export default function RegisterPage() {
       })
       if (success) {
         toast.success('Account created successfully! Welcome to EasyBeds!')
-        router.push('/')
+        router.push('/dashboard')
       } else {
         toast.error('Registration failed. Please try again.')
       }

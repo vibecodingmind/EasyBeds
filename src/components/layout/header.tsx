@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Menu,
   Bell,
@@ -79,8 +81,6 @@ const NOTIFICATION_COLORS: Record<string, string> = {
   custom: 'text-slate-400 bg-slate-500/15',
 }
 
-// ─── Human-readable type labels ──────────────────────────────────────────
-
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   booking_confirmation: 'Booking Confirmed',
   booking_reminder: 'Booking Reminder',
@@ -102,7 +102,6 @@ function getNotificationTitle(n: NotificationItem): string {
 
 function getNotificationDescription(n: NotificationItem): string | null {
   if (n.body) {
-    // Truncate body to ~100 chars
     const text = n.body.replace(/<[^>]*>/g, '').trim()
     if (text.length > 100) return text.slice(0, 100) + '...'
     return text.length > 0 ? text : null
@@ -122,23 +121,35 @@ function getChannelIcon(channel: string) {
   }
 }
 
-// ─── View titles ──────────────────────────────────────────────────────────
+// ─── Path → Title mapping ──────────────────────────────────────────────────
 
-const viewTitles: Record<string, string> = {
-  dashboard: 'Dashboard',
-  calendar: 'Room Calendar',
-  bookings: 'Bookings',
-  rooms: 'Room Management',
-  guests: 'Guest Directory',
-  channels: 'Channel Manager',
-  reports: 'Reports & Analytics',
-  settings: 'Hotel Settings',
+const PATH_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/dashboard/calendar': 'Room Calendar',
+  '/dashboard/bookings': 'Bookings',
+  '/dashboard/rooms': 'Room Management',
+  '/dashboard/guests': 'Guest Directory',
+  '/dashboard/channels': 'Channel Manager',
+  '/dashboard/housekeeping': 'Housekeeping',
+  '/dashboard/reports': 'Reports & Analytics',
+  '/dashboard/analytics': 'Analytics',
+  '/dashboard/revenue': 'Revenue & Pricing',
+  '/dashboard/rate-parity': 'Rate Parity',
+  '/dashboard/concierge': 'AI Concierge',
+  '/dashboard/reviews': 'Reviews',
+  '/dashboard/loyalty': 'Loyalty',
+  '/dashboard/activity': 'Activity Log',
+  '/dashboard/night-audit': 'Night Audit',
+  '/dashboard/settings': 'Settings',
+  '/dashboard/subscription': 'Subscription & Billing',
+  '/dashboard/admin': 'Platform Admin',
 }
 
 // ─── Notification Bell Component ──────────────────────────────────────────
 
 function NotificationBell() {
-  const { currentHotelId, navigate } = useAppStore()
+  const router = useRouter()
+  const { currentHotelId } = useAppStore()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -156,21 +167,18 @@ function NotificationBell() {
         setNotifications(res.data)
       }
     } catch {
-      // Silently fail — don't spam console
+      // Silently fail
     }
   }, [currentHotelId])
 
-  // Fetch when popover opens or hotel changes
   useEffect(() => {
     if (!currentHotelId) return
 
-    // Fetch immediately when popover opens
     if (open && !prevOpenRef.current) {
       setLoading(true)
       fetchNotifications().finally(() => setLoading(false))
     }
 
-    // Also refresh in background every 30 seconds
     if (open && !pollingRef.current) {
       pollingRef.current = setInterval(() => {
         fetchNotifications()
@@ -185,13 +193,11 @@ function NotificationBell() {
     prevOpenRef.current = open
   }, [open, currentHotelId, fetchNotifications])
 
-  // Initial fetch on mount
   useEffect(() => {
     if (!currentHotelId) return
     fetchNotifications()
   }, [currentHotelId, fetchNotifications])
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollingRef.current) {
@@ -210,7 +216,6 @@ function NotificationBell() {
       await Promise.allSettled(
         unreadIds.map((id) => api.markNotificationRead(currentHotelId, id)),
       )
-      // Update local state to reflect read status
       setNotifications((prev) =>
         prev.map((n) => {
           if (unreadIds.includes(n.id)) {
@@ -265,7 +270,6 @@ function NotificationBell() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {/* Header */}
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <h3 className="text-sm font-semibold text-white">Notifications</h3>
                 {unreadCount > 0 && (
@@ -286,7 +290,6 @@ function NotificationBell() {
                 )}
               </div>
 
-              {/* Notification List */}
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-4 py-10">
                   <Bell className="h-8 w-8 text-white/20" />
@@ -318,14 +321,12 @@ function NotificationBell() {
                             unread ? 'bg-emerald-500/5' : ''
                           }`}
                         >
-                          {/* Type icon */}
                           <div
                             className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${colorClass}`}
                           >
                             <Icon className="h-4 w-4" />
                           </div>
 
-                          {/* Content */}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <p
@@ -356,7 +357,6 @@ function NotificationBell() {
                 </ScrollArea>
               )}
 
-              {/* Footer */}
               {notifications.length > 0 && (
                 <div className="border-t border-white/10 px-4 py-2.5">
                   <Button
@@ -365,7 +365,7 @@ function NotificationBell() {
                     className="w-full text-xs text-emerald-400 hover:text-emerald-300 hover:bg-white/10"
                     onClick={() => {
                       setOpen(false)
-                      navigate('activity')
+                      router.push('/dashboard/activity')
                     }}
                   >
                     View all notifications
@@ -383,14 +383,14 @@ function NotificationBell() {
 // ─── Main Header ──────────────────────────────────────────────────────────
 
 export function AppHeader() {
+  const pathname = usePathname()
+  const router = useRouter()
   const {
-    currentView,
     toggleSidebar,
     setShowNewBookingDialog,
     logout,
     currentUser,
     hotel,
-    navigate,
     userRole,
   } = useAppStore()
 
@@ -401,8 +401,14 @@ export function AppHeader() {
     .toUpperCase() || 'U'
 
   const hotelName = hotel?.name || 'EasyBeds'
+  const pageTitle = PATH_TITLES[pathname] || 'Dashboard'
 
   const { theme, setTheme } = useTheme()
+
+  const handleLogout = () => {
+    logout()
+    router.push('/')
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b dark:border-white/10 border-gray-200 dark:bg-gray-900/60 bg-white/80 backdrop-blur-xl px-4 md:px-6">
@@ -419,7 +425,7 @@ export function AppHeader() {
       {/* Title */}
       <div className="flex-1">
         <h1 className="text-lg font-semibold tracking-tight dark:text-white text-gray-900">
-          {viewTitles[currentView] || 'Dashboard'}
+          {pageTitle}
         </h1>
         <p className="hidden text-xs dark:text-white/50 text-gray-500 sm:block">
           {hotelName}
@@ -493,14 +499,14 @@ export function AppHeader() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-white/10" />
-          <DropdownMenuItem onClick={() => navigate('settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
+          <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
             Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => navigate('settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
+          <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="text-white/70 hover:text-white hover:bg-white/10 focus:text-white focus:bg-white/10">
             Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/10" />
-          <DropdownMenuItem className="text-red-400 hover:text-red-300 hover:bg-white/10 focus:text-red-300 focus:bg-white/10" onClick={logout}>
+          <DropdownMenuItem className="text-red-400 hover:text-red-300 hover:bg-white/10 focus:text-red-300 focus:bg-white/10" onClick={handleLogout}>
             Log out
           </DropdownMenuItem>
         </DropdownMenuContent>

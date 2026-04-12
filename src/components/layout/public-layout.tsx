@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import {
-  Hotel, Menu, X, Sun, Moon, ArrowRight, Shield, ChevronDown, LogOut
+  Hotel, Menu, X, Sun, Moon, ArrowRight, Shield, ChevronDown, LogOut, LayoutDashboard
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -285,6 +285,14 @@ export function PublicNavbar() {
                       <div className="text-sm font-medium text-white truncate">{currentUser.name}</div>
                       <div className="text-xs text-white/50 truncate">{currentUser.email}</div>
                     </div>
+                    <Link href="/dashboard" onClick={() => setAvatarDropdown(false)}>
+                      <button
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                      >
+                        <LayoutDashboard className="h-4 w-4" />
+                        Dashboard
+                      </button>
+                    </Link>
                     <button
                       onClick={() => { logout(); setAvatarDropdown(false) }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
@@ -364,6 +372,15 @@ export function PublicNavbar() {
                         <div className="text-xs text-white/50 truncate">{currentUser.email}</div>
                       </div>
                     </div>
+                    <Link href="/dashboard" onClick={closeMobile}>
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                      >
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Go to Dashboard
+                      </Button>
+                    </Link>
                     <Button
                       variant="outline"
                       onClick={() => { logout(); closeMobile() }}

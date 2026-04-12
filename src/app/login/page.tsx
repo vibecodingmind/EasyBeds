@@ -33,7 +33,7 @@ export default function LoginPage() {
       const success = await login(email, password)
       if (success) {
         toast.success('Welcome back!')
-        router.push('/')
+        router.push('/dashboard')
       } else {
         toast.error('Invalid email or password. Please try again.')
       }
