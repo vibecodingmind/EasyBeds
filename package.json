@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "npx prisma db push --accept-data-loss && next build",
-    "start": "npx prisma db push --accept-data-loss && next start",
+    "build": "next build",
+    "start": "npx prisma db push --accept-data-loss 2>/dev/null; next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
