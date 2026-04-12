@@ -1185,208 +1185,21 @@ function AuthModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  LANDING PAGE (full marketing page shown to visitors)                      */
+/*  LANDING PAGE                                                              */
 /* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-/*  CONTACT PAGE                                                             */
-/* -------------------------------------------------------------------------- */
-const contactSubjects = ['General Inquiry', 'Sales', 'Technical Support', 'Partnership', 'Billing']
-
-function ContactPage({ onBack }: { onBack?: () => void }) {
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', subject: '', message: '' })
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.name || !formData.email || !formData.subject || !formData.message) {
-      toast.error('Please fill in all required fields')
-      return
-    }
-    setLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-    toast.success('Message sent! We\'ll get back to you within 2-4 hours.')
-    setFormData({ name: '', email: '', phone: '', subject: '', message: '' })
-    setLoading(false)
-  }
-
-  const inputCls = 'border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:ring-emerald-500/20'
-
-  return (
-    <div className="min-h-screen bg-gray-950">
-      <Navbar onLogoClick={onBack} />
-      <main className="pt-16">
-        {/* Hero */}
-        <section className="relative overflow-hidden py-20 sm:py-28">
-          <div className="absolute inset-0">
-            <div className="absolute top-0 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-500/10 blur-[60px] animate-pulse" style={{ animationDuration: '8s' }} />
-            <div className="absolute bottom-0 right-1/4 h-[300px] w-[300px] rounded-full bg-teal-400/8 blur-[50px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
-          </div>
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/70 backdrop-blur-sm">
-                <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
-                Get In Touch
-              </div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
-                We&apos;d love to{' '}
-                <span className="bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">hear from you</span>
-              </h1>
-              <p className="mt-6 text-lg leading-relaxed text-white/60 max-w-2xl mx-auto">
-                Whether you have a question about our platform, need a demo, or want to discuss partnership opportunities &mdash; our team is here to help.
-              </p>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Contact Content */}
-        <section className="relative overflow-hidden pb-20 sm:pb-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-8 lg:grid-cols-5">
-              {/* Contact Info - Left Column */
-              <div className="lg:col-span-2 space-y-4">
-                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Email Us</h3>
-                  <p className="mt-1 text-sm text-white/60">hello@easybeds.io</p>
-                  <p className="text-xs text-white/40">support@easybeds.io</p>
-                </motion.div>
-                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
-                    <Phone className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Call Us</h3>
-                  <p className="mt-1 text-sm text-white/60">+254 700 123 456</p>
-                  <p className="text-xs text-white/40">Mon-Fri, 8am-6pm EAT</p>
-                </motion.div>
-                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.2 }}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
-                    <MapPin className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Visit Us</h3>
-                  <p className="mt-1 text-sm text-white/60">Westlands, Nairobi</p>
-                  <p className="text-xs text-white/40">Kenya</p>
-                </motion.div>
-                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
-                    <Clock className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Business Hours</h3>
-                  <p className="mt-1 text-sm text-white/60">We typically respond within</p>
-                  <p className="text-sm font-semibold text-emerald-400">2-4 hours</p>
-                </motion.div>
-              </div>
-
-              {/* Contact Form - Right Column */
-              <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
-                className="lg:col-span-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur-xl">
-                  <h2 className="text-2xl font-bold text-white">Send us a message</h2>
-                  <p className="mt-2 text-sm text-white/60">Fill out the form and our team will get back to you promptly.</p>
-                  <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="c-name" className="text-white/70">Full Name *</Label>
-                        <Input id="c-name" placeholder="John Smith" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputCls} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="c-email" className="text-white/70">Email Address *</Label>
-                        <Input id="c-email" type="email" placeholder="john@hotel.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={inputCls} />
-                      </div>
-                    </div>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="c-phone" className="text-white/70">Phone Number</Label>
-                        <Input id="c-phone" type="tel" placeholder="+254 700 ..." value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className={inputCls} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="c-subject" className="text-white/70">Subject *</Label>
-                        <select
-                          id="c-subject"
-                          value={formData.subject}
-                          onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                          className={cn(inputCls, 'h-10 w-full appearance-none rounded-lg px-3 py-2')}
-                        >
-                          <option value="">Select a subject</option>
-                          {contactSubjects.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="c-message" className="text-white/70">Message *</Label>
-                      <Textarea id="c-message" placeholder="Tell us more about your needs..." rows={6} value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} className={inputCls} />
-                    </div>
-                    <Button type="submit" disabled={loading}
-                      className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 border-0">
-                      {loading ? (
-                        <span className="flex items-center gap-2">
-                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                          Sending...
-                        </span>
-                      ) : (
-                        <>
-                          Send Message
-                          <Send className="ml-2 h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
-                  </form>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
-        {/* Map Placeholder */}
-        <section className="relative overflow-hidden pb-20 sm:pb-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden backdrop-blur-xl">
-              <div className="flex h-64 sm:h-80 items-center justify-center bg-gradient-to-br from-emerald-950/50 to-teal-950/50">
-                <div className="text-center">
-                  <MapPin className="mx-auto h-12 w-12 text-emerald-400/60" />
-                  <p className="mt-3 text-lg font-semibold text-white/70">EasyBeds HQ</p>
-                  <p className="text-sm text-white/50">Westlands, Nairobi, Kenya</p>
-                  <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
-                    className="mt-3 inline-flex items-center gap-1 text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                    Open in Google Maps
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
-  )
-}
 
 /* -------------------------------------------------------------------------- */
 /*  LANDING PAGE WITH PAGE NAVIGATION                                         */
 /* -------------------------------------------------------------------------- */
 function LandingPage() {
-  const [pageView, setPageView] = useState<'landing' | 'contact'>('landing')
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null)
 
   const handleLoginClick = useCallback(() => { setAuthMode('login') }, [])
   const handleRegisterClick = useCallback(() => { setAuthMode('register') }, [])
-  const handleContactClick = useCallback(() => { setPageView('contact'); window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
-  const handleBackToLanding = useCallback(() => { setPageView('landing'); window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
+  const handleContactClick = useCallback(() => { window.location.href = '/contact' }, [])
   const handleAuthClose = useCallback(() => setAuthMode(null), [])
 
-  const navProps = { onLoginClick: handleLoginClick, onRegisterClick: handleRegisterClick, onContactClick: handleContactClick, onLogoClick: handleBackToLanding }
-
-  if (pageView === 'contact') {
-    return <ContactPage onBack={handleBackToLanding} />
-  }
+  const navProps = { onLoginClick: handleLoginClick, onRegisterClick: handleRegisterClick, onContactClick: handleContactClick }
 
   return (
     <>
