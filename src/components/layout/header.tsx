@@ -16,6 +16,8 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -33,9 +35,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { useTheme } from 'next-themes'
 import { useAppStore } from '@/lib/store'
 import { api, type NotificationItem } from '@/lib/api'
 import { timeAgo } from '@/lib/time-ago'
@@ -394,13 +402,15 @@ export function AppHeader() {
 
   const hotelName = hotel?.name || 'EasyBeds'
 
+  const { theme, setTheme } = useTheme()
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-white/10 bg-gray-900/60 backdrop-blur-xl px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b dark:border-white/10 border-gray-200 dark:bg-gray-900/60 bg-white/80 backdrop-blur-xl px-4 md:px-6">
       {/* Mobile menu */}
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden text-white/70 hover:text-white hover:bg-white/10"
+        className="md:hidden dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
         onClick={toggleSidebar}
       >
         <Menu className="h-5 w-5" />
@@ -408,25 +418,41 @@ export function AppHeader() {
 
       {/* Title */}
       <div className="flex-1">
-        <h1 className="text-lg font-semibold tracking-tight text-white">
+        <h1 className="text-lg font-semibold tracking-tight dark:text-white text-gray-900">
           {viewTitles[currentView] || 'Dashboard'}
         </h1>
-        <p className="hidden text-xs text-white/50 sm:block">
+        <p className="hidden text-xs dark:text-white/50 text-gray-500 sm:block">
           {hotelName}
         </p>
       </div>
 
       {/* Search */}
       <div className="relative hidden md:block">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-white/30" />
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 dark:text-white/30 text-gray-400" />
         <Input
           placeholder="Search bookings, guests..."
-          className="w-64 border-white/10 bg-white/5 pl-9 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:ring-emerald-500/20"
+          className="w-64 dark:border-white/10 dark:bg-white/5 dark:text-white border-gray-300 bg-gray-50 pl-9 dark:placeholder:text-white/30 placeholder:text-gray-400 focus:border-emerald-500/50 focus:ring-emerald-500/20"
         />
       </div>
 
       {/* Notifications */}
       <NotificationBell />
+
+      {/* Theme toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Toggle theme</TooltipContent>
+      </Tooltip>
 
       {/* New booking quick action */}
       <Button

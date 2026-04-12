@@ -113,22 +113,22 @@ export function AppSidebar() {
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-full flex-col border-r bg-gray-900/80 backdrop-blur-xl transition-all duration-300 border-white/10',
+          'fixed left-0 top-0 z-50 flex h-full flex-col border-r dark:bg-gray-900/80 dark:border-white/10 bg-white border-gray-200 backdrop-blur-xl transition-all duration-300',
           sidebarOpen ? 'w-64' : 'w-0 md:w-16',
           'md:relative md:z-auto',
         )}
       >
         {/* Brand */}
-        <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
+        <div className="flex h-16 items-center gap-3 border-b dark:border-white/10 border-gray-200 px-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-lg shadow-emerald-600/25">
             <Hotel className="h-5 w-5" />
           </div>
           {sidebarOpen && (
             <div className="flex flex-col overflow-hidden">
-              <span className="text-sm font-bold tracking-tight text-white">
+              <span className="text-sm font-bold tracking-tight dark:text-white text-gray-800">
                 EasyBeds
               </span>
-              <span className="truncate text-[11px] text-white/50">
+              <span className="truncate text-[11px] dark:text-white/50 text-gray-500">
                 {hotelName}
               </span>
             </div>
@@ -136,7 +136,7 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto hidden h-8 w-8 text-white/50 hover:text-white hover:bg-white/10 md:flex"
+            className="ml-auto flex h-8 w-8 dark:text-white/50 text-gray-500 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
             onClick={toggleSidebar}
           >
             <ChevronLeft
@@ -156,7 +156,7 @@ export function AppSidebar() {
               <div>
                 {sidebarOpen && (
                   <div className="mb-1 px-3">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider dark:text-white/40 text-gray-400">
                       Platform
                     </span>
                   </div>
@@ -172,7 +172,7 @@ export function AppSidebar() {
                             <Button
                               variant={isActive ? 'secondary' : 'ghost'}
                               size="icon"
-                              className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                              className="w-full dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
                               onClick={() => navigate('admin')}
                             >
                               <Icon className="h-4 w-4" />
@@ -188,7 +188,7 @@ export function AppSidebar() {
                       <Button
                         variant={isActive ? 'secondary' : 'ghost'}
                         className={cn(
-                          'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                          'w-full justify-start gap-3 px-3 dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100',
                           isActive &&
                             'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                         )}
@@ -214,7 +214,7 @@ export function AppSidebar() {
                 <div key={section.label}>
                   {sidebarOpen && (
                     <div className="mb-1 px-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider dark:text-white/40 text-gray-400">
                         {section.label}
                       </span>
                     </div>
@@ -231,7 +231,7 @@ export function AppSidebar() {
                               <Button
                                 variant={isActive ? 'secondary' : 'ghost'}
                                 size="icon"
-                                className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                                className="w-full dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
                                 onClick={() => navigate(item.view)}
                               >
                                 <Icon className="h-4 w-4" />
@@ -249,7 +249,7 @@ export function AppSidebar() {
                           key={item.view}
                           variant={isActive ? 'secondary' : 'ghost'}
                           className={cn(
-                            'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                            'w-full justify-start gap-3 px-3 dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100',
                             isActive &&
                               'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                           )}
@@ -268,7 +268,7 @@ export function AppSidebar() {
             {/* Settings at bottom */}
             {sidebarOpen && (
               <div className="mb-1 px-3">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <span className="text-[10px] font-semibold uppercase tracking-wider dark:text-white/40 text-gray-400">
                   System
                 </span>
               </div>
@@ -284,7 +284,7 @@ export function AppSidebar() {
                       <Button
                         variant={isActive ? 'secondary' : 'ghost'}
                         size="icon"
-                        className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                        className="w-full dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
                         onClick={() => navigate('subscription')}
                       >
                         <Icon className="h-4 w-4" />
@@ -298,7 +298,7 @@ export function AppSidebar() {
                 <Button
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={cn(
-                    'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                    'w-full justify-start gap-3 px-3 dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100',
                     isActive && 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                   )}
                   onClick={() => navigate('subscription')}
@@ -319,7 +319,7 @@ export function AppSidebar() {
                       <Button
                         variant={isActive ? 'secondary' : 'ghost'}
                         size="icon"
-                        className="w-full text-white/70 hover:text-white hover:bg-white/10"
+                        className="w-full dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100"
                         onClick={() => navigate('settings')}
                       >
                         <Icon className="h-4 w-4" />
@@ -335,7 +335,7 @@ export function AppSidebar() {
                 <Button
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={cn(
-                    'w-full justify-start gap-3 px-3 text-white/70 hover:text-white hover:bg-white/10',
+                    'w-full justify-start gap-3 px-3 dark:text-white/70 text-gray-600 dark:hover:text-white dark:hover:bg-white/10 hover:text-gray-900 hover:bg-gray-100',
                     isActive &&
                       'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-400',
                   )}
@@ -350,7 +350,7 @@ export function AppSidebar() {
         </ScrollArea>
 
         {/* User section */}
-        <Separator className="bg-white/10" />
+        <Separator className="dark:bg-white/10 bg-gray-200" />
         <div className="p-3">
           {sidebarOpen ? (
             <div className="flex items-center gap-3 rounded-xl p-2">
@@ -360,17 +360,17 @@ export function AppSidebar() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium text-white">
+                <span className="truncate text-sm font-medium dark:text-white text-gray-800">
                   {currentUser?.name}
                 </span>
-                <span className="truncate text-xs text-white/50">
+                <span className="truncate text-xs dark:text-white/50 text-gray-500">
                   {userRole || 'Staff'}
                 </span>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-white/40 hover:text-red-400 hover:bg-white/10"
+                className="h-8 w-8 dark:text-white/40 text-gray-400 hover:text-red-400 dark:hover:bg-white/10 hover:bg-gray-100"
                 onClick={logout}
               >
                 <LogOut className="h-4 w-4" />
@@ -382,7 +382,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="w-full text-white/40 hover:text-red-400 hover:bg-white/10"
+                  className="w-full dark:text-white/40 text-gray-400 hover:text-red-400 dark:hover:bg-white/10 hover:bg-gray-100"
                   onClick={logout}
                 >
                   <LogOut className="h-4 w-4" />
