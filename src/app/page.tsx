@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Hotel, Calendar, RefreshCw, Globe, Sparkles, Bot, TrendingUp,
   Users, BarChart3, CheckCircle2, ArrowRight, Star,
