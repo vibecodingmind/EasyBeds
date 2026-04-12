@@ -7,7 +7,8 @@ import { useTheme } from 'next-themes'
 import {
   Hotel, Calendar, RefreshCw, Globe, Sparkles, Bot, TrendingUp,
   Users, BarChart3, CheckCircle2, ArrowRight, Star, Menu, X,
-  Eye, EyeOff, ChevronRight, Shield, Zap, Clock, Sun, Moon
+  Eye, EyeOff, ChevronRight, ChevronDown, Shield, Zap, Clock, Sun, Moon,
+  LogOut, MessageSquare, Phone, Mail, MapPin, Send
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
 import { canAccessView, getDefaultView } from '@/lib/permissions'
@@ -49,13 +51,22 @@ import { BookingDetailsDialog } from '@/components/booking/booking-details-dialo
 /* -------------------------------------------------------------------------- */
 /*  NAVIGATION                                                                */
 /* -------------------------------------------------------------------------- */
-function Navbar() {
-  const pathname = usePathname()
+type NavbarProps = {
+  onLoginClick?: () => void
+  onRegisterClick?: () => void
+  onContactClick?: () => void
+  onLogoClick?: () => void
+}
+
+function Navbar({ onLoginClick, onRegisterClick, onContactClick, onLogoClick }: NavbarProps) {
   const { theme, setTheme } = useTheme()
+  const { isAuthenticated, currentUser, logout } = useAppStore()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [avatarDropdown, setAvatarDropdown] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const avatarRef = useRef<HTMLDivElement>(null)
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true) }, [])
@@ -80,19 +91,43 @@ function Navbar() {
       if (mobileOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMobileOpen(false)
       }
+      if (avatarDropdown && avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarDropdown(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [mobileOpen])
+  }, [mobileOpen, avatarDropdown])
 
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
+  const getInitials = (name: string) =>
+    name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+
   const links = [
     { label: 'Features', href: '#features' },
-    { label: 'Pricing', href: '/pricing' },
-    { label: 'About', href: '/about' },
-    { label: 'Contact', href: '/contact' },
+    { label: 'Pricing', href: '#pricing' },
+    { label: 'About', href: '#about' },
+    { label: 'Contact', href: '#contact', onClick: onContactClick },
   ]
+
+  const handleNavClick = (link: typeof links[0]) => {
+    closeMobile()
+    if (link.onClick) {
+      link.onClick()
+    } else if (link.href.startsWith('#')) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setTimeout(() => {
+        const el = document.querySelector(link.href)
+        el?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
+  }
 
   return (
     <nav
@@ -105,45 +140,77 @@ function Navbar() {
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
+        <button onClick={onLogoClick} className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 shadow-lg shadow-emerald-600/30">
             <Hotel className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold text-white">EasyBeds</span>
-        </Link>
+        </button>
 
         {/* Desktop links */}
         <div className="hidden items-center gap-8 md:flex">
           {links.map((link) => (
-            <Link
+            <button
               key={link.href}
-              href={link.href}
-              className={cn(
-                'text-sm font-medium transition-colors hover:text-white',
-                pathname === link.href ? 'text-white' : 'text-white/60'
-              )}
+              onClick={() => handleNavClick(link)}
+              className="text-sm font-medium text-white/60 transition-colors hover:text-white"
             >
               {link.label}
-            </Link>
+            </button>
           ))}
         </div>
 
         {/* Desktop CTA */}
         <div className="hidden items-center gap-3 md:flex">
-          <Button
-            variant="ghost"
-            onClick={() => { window.location.href = '/contact' }}
-            className="text-white/70 hover:text-white hover:bg-white/10"
-          >
-            Log In
-          </Button>
-          <Link href="/contact">
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white"
-            >
-              Start Free Trial
-            </Button>
-          </Link>
+          {isAuthenticated && currentUser ? (
+            <div className="flex items-center gap-3" ref={avatarRef}>
+              <button
+                onClick={() => setAvatarDropdown(!avatarDropdown)}
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 pr-3 backdrop-blur-sm transition-colors hover:bg-white/10"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-xs font-bold text-white shadow-lg shadow-emerald-500/20">
+                  {getInitials(currentUser.name)}
+                </div>
+                <span className="text-sm font-medium text-white/80">{currentUser.name.split(' ')[0]}</span>
+                <ChevronDown className={cn('h-4 w-4 text-white/50 transition-transform', avatarDropdown && 'rotate-180')} />
+              </button>
+              <AnimatePresence>
+                {avatarDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-4 top-14 w-48 rounded-xl border border-white/10 bg-gray-900/95 p-1.5 shadow-xl shadow-black/40 backdrop-blur-xl"
+                  >
+                    <button
+                      onClick={() => { logout(); setAvatarDropdown(false) }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                onClick={onLoginClick}
+                className="text-white/70 hover:text-white hover:bg-white/10"
+              >
+                Log In
+              </Button>
+              <Button
+                onClick={onRegisterClick}
+                className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white"
+              >
+                Start Free Trial
+              </Button>
+            </>
+          )}
           {/* Theme Toggle */}
           <Button
             variant="ghost"
@@ -192,29 +259,42 @@ function Navbar() {
           >
             <div className="px-4 pb-4 pt-2">
               {links.map((link) => (
-                <Link
+                <button
                   key={link.href}
-                  href={link.href}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                  onClick={closeMobile}
+                  onClick={() => handleNavClick(link)}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   {link.label}
-                </Link>
+                </button>
               ))}
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                <Link href="/contact" onClick={closeMobile}>
-                  <Button
-                    variant="outline"
-                    className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                  >
-                    Log In
-                  </Button>
-                </Link>
-                <Link href="/contact" onClick={closeMobile}>
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
-                    Start Free Trial
-                  </Button>
-                </Link>
+                {isAuthenticated && currentUser ? (
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-sm font-bold text-white">
+                      {getInitials(currentUser.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-white truncate">{currentUser.name}</div>
+                      <div className="text-xs text-white/50 truncate">{currentUser.email}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => { onLoginClick?.(); closeMobile() }}
+                      className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    >
+                      Log In
+                    </Button>
+                    <Button
+                      onClick={() => { onRegisterClick?.(); closeMobile() }}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25"
+                    >
+                      Start Free Trial
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
@@ -227,7 +307,7 @@ function Navbar() {
 /* -------------------------------------------------------------------------- */
 /*  HERO SECTION                                                              */
 /* -------------------------------------------------------------------------- */
-function HeroSection() {
+function HeroSection({ onRegisterClick, onLoginClick }: { onRegisterClick?: () => void; onLoginClick?: () => void }) {
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-gray-950 via-emerald-950 to-gray-950">
       {/* Animated background orbs */}
@@ -287,27 +367,25 @@ function HeroSection() {
           className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
         >
           {/* Primary CTA - glow glass button */}
-          <Link href="/contact">
-            <Button
-              size="lg"
-              className="h-13 relative overflow-hidden bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
-            >
-              Start Free Trial
-              <ArrowRight className="ml-2 h-5 w-5" />
-              {/* Glow overlay */}
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 hover:opacity-100 transition-opacity" />
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            onClick={onRegisterClick}
+            className="h-13 relative overflow-hidden bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
+          >
+            Start Free Trial
+            <ArrowRight className="ml-2 h-5 w-5" />
+            {/* Glow overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 hover:opacity-100 transition-opacity" />
+          </Button>
           {/* Secondary CTA - glass button */}
-          <Link href="/contact">
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-13 border-white/20 bg-white/5 px-8 text-base text-white backdrop-blur-xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 sm:text-lg"
-            >
-              Book a Demo
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={onLoginClick}
+            className="h-13 border-white/20 bg-white/5 px-8 text-base text-white backdrop-blur-xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 sm:text-lg"
+          >
+            Book a Demo
+          </Button>
         </motion.div>
 
         {/* Stats - Glass Stat Cards */}
@@ -561,7 +639,7 @@ const pricingTiers = [
   },
 ]
 
-function PricingSection() {
+function PricingSection({ onRegisterClick }: { onRegisterClick?: () => void }) {
   return (
     <section id="pricing" className="relative overflow-hidden bg-gray-950/70 py-24 sm:py-32">
       {/* Background glow for popular card */}
@@ -615,19 +693,18 @@ function PricingSection() {
                   </li>
                 ))}
               </ul>
-              <Link href="/contact">
-                <Button
-                  className={cn(
-                    'w-full transition-all duration-300',
-                    tier.popular
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
-                      : 'border border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30'
-                  )}
-                  variant={tier.popular ? 'default' : 'outline'}
-                >
-                  {tier.cta}
-                </Button>
-              </Link>
+              <Button
+                onClick={onRegisterClick}
+                className={cn(
+                  'w-full transition-all duration-300',
+                  tier.popular
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
+                    : 'border border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30'
+                )}
+                variant={tier.popular ? 'default' : 'outline'}
+              >
+                {tier.cta}
+              </Button>
             </div>
           ))}
         </div>
@@ -717,7 +794,7 @@ function TestimonialsSection() {
 /* -------------------------------------------------------------------------- */
 /*  CTA SECTION                                                               */
 /* -------------------------------------------------------------------------- */
-function CTASection() {
+function CTASection({ onRegisterClick }: { onRegisterClick?: () => void }) {
   return (
     <section className="relative overflow-hidden py-24 sm:py-32">
       {/* Animated gradient background */}
@@ -740,15 +817,14 @@ function CTASection() {
           Join 2,400+ hotels already using EasyBeds to boost revenue, streamline operations, and delight guests.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Link href="/contact">
-            <Button
-              size="lg"
-              className="h-13 bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
-            >
-              Get Started Free
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            onClick={onRegisterClick}
+            className="h-13 bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
+          >
+            Get Started Free
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
           <p className="text-sm text-white/40">
             No credit card required · Free plan available
           </p>
@@ -761,7 +837,7 @@ function CTASection() {
 /* -------------------------------------------------------------------------- */
 /*  FOOTER                                                                    */
 /* -------------------------------------------------------------------------- */
-function Footer() {
+function Footer({ onContactClick }: { onContactClick?: () => void }) {
   return (
     <footer className="bg-gray-950 border-t border-white/10 py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -826,9 +902,9 @@ function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                <button onClick={onContactClick} className="text-sm text-white/50 transition-colors hover:text-emerald-400">
                   Contact
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
@@ -870,12 +946,14 @@ function Footer() {
 function AuthModal({
   open,
   onClose,
+  defaultMode = 'login',
 }: {
   open: boolean
   onClose: () => void
+  defaultMode?: 'login' | 'register'
 }) {
   const { login, register } = useAppStore()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register'>(defaultMode)
   const [email, setEmail] = useState('owner@easybeds.com')
   const [password, setPassword] = useState('owner123')
   const [showPassword, setShowPassword] = useState(false)
@@ -1109,18 +1187,219 @@ function AuthModal({
 /* -------------------------------------------------------------------------- */
 /*  LANDING PAGE (full marketing page shown to visitors)                      */
 /* -------------------------------------------------------------------------- */
-function LandingPage() {
+/* -------------------------------------------------------------------------- */
+/*  CONTACT PAGE                                                             */
+/* -------------------------------------------------------------------------- */
+const contactSubjects = ['General Inquiry', 'Sales', 'Technical Support', 'Partnership', 'Billing']
+
+function ContactPage({ onBack }: { onBack?: () => void }) {
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', subject: '', message: '' })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name || !formData.email || !formData.subject || !formData.message) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+    setLoading(true)
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    toast.success('Message sent! We\'ll get back to you within 2-4 hours.')
+    setFormData({ name: '', email: '', phone: '', subject: '', message: '' })
+    setLoading(false)
+  }
+
+  const inputCls = 'border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:ring-emerald-500/20'
+
   return (
     <div className="min-h-screen bg-gray-950">
-      <Navbar />
-      <HeroSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <PricingSection />
-      <TestimonialsSection />
-      <CTASection />
+      <Navbar onLogoClick={onBack} />
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative overflow-hidden py-20 sm:py-28">
+          <div className="absolute inset-0">
+            <div className="absolute top-0 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-500/10 blur-[60px] animate-pulse" style={{ animationDuration: '8s' }} />
+            <div className="absolute bottom-0 right-1/4 h-[300px] w-[300px] rounded-full bg-teal-400/8 blur-[50px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
+          </div>
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+              <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/70 backdrop-blur-sm">
+                <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+                Get In Touch
+              </div>
+              <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
+                We&apos;d love to{' '}
+                <span className="bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">hear from you</span>
+              </h1>
+              <p className="mt-6 text-lg leading-relaxed text-white/60 max-w-2xl mx-auto">
+                Whether you have a question about our platform, need a demo, or want to discuss partnership opportunities &mdash; our team is here to help.
+              </p>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Contact Content */}
+        <section className="relative overflow-hidden pb-20 sm:pb-28">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-8 lg:grid-cols-5">
+              {/* Contact Info - Left Column */
+              <div className="lg:col-span-2 space-y-4">
+                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Email Us</h3>
+                  <p className="mt-1 text-sm text-white/60">hello@easybeds.io</p>
+                  <p className="text-xs text-white/40">support@easybeds.io</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
+                    <Phone className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Call Us</h3>
+                  <p className="mt-1 text-sm text-white/60">+254 700 123 456</p>
+                  <p className="text-xs text-white/40">Mon-Fri, 8am-6pm EAT</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.2 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Visit Us</h3>
+                  <p className="mt-1 text-sm text-white/60">Westlands, Nairobi</p>
+                  <p className="text-xs text-white/40">Kenya</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl group hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Business Hours</h3>
+                  <p className="mt-1 text-sm text-white/60">We typically respond within</p>
+                  <p className="text-sm font-semibold text-emerald-400">2-4 hours</p>
+                </motion.div>
+              </div>
+
+              {/* Contact Form - Right Column */
+              <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
+                className="lg:col-span-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur-xl">
+                  <h2 className="text-2xl font-bold text-white">Send us a message</h2>
+                  <p className="mt-2 text-sm text-white/60">Fill out the form and our team will get back to you promptly.</p>
+                  <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="c-name" className="text-white/70">Full Name *</Label>
+                        <Input id="c-name" placeholder="John Smith" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="c-email" className="text-white/70">Email Address *</Label>
+                        <Input id="c-email" type="email" placeholder="john@hotel.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="c-phone" className="text-white/70">Phone Number</Label>
+                        <Input id="c-phone" type="tel" placeholder="+254 700 ..." value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="c-subject" className="text-white/70">Subject *</Label>
+                        <select
+                          id="c-subject"
+                          value={formData.subject}
+                          onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                          className={cn(inputCls, 'h-10 w-full appearance-none rounded-lg px-3 py-2')}
+                        >
+                          <option value="">Select a subject</option>
+                          {contactSubjects.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="c-message" className="text-white/70">Message *</Label>
+                      <Textarea id="c-message" placeholder="Tell us more about your needs..." rows={6} value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} className={inputCls} />
+                    </div>
+                    <Button type="submit" disabled={loading}
+                      className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 border-0">
+                      {loading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          Sending...
+                        </span>
+                      ) : (
+                        <>
+                          Send Message
+                          <Send className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* Map Placeholder */}
+        <section className="relative overflow-hidden pb-20 sm:pb-28">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden backdrop-blur-xl">
+              <div className="flex h-64 sm:h-80 items-center justify-center bg-gradient-to-br from-emerald-950/50 to-teal-950/50">
+                <div className="text-center">
+                  <MapPin className="mx-auto h-12 w-12 text-emerald-400/60" />
+                  <p className="mt-3 text-lg font-semibold text-white/70">EasyBeds HQ</p>
+                  <p className="text-sm text-white/50">Westlands, Nairobi, Kenya</p>
+                  <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-1 text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                    Open in Google Maps
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
       <Footer />
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LANDING PAGE WITH PAGE NAVIGATION                                         */
+/* -------------------------------------------------------------------------- */
+function LandingPage() {
+  const [pageView, setPageView] = useState<'landing' | 'contact'>('landing')
+  const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null)
+
+  const handleLoginClick = useCallback(() => { setAuthMode('login') }, [])
+  const handleRegisterClick = useCallback(() => { setAuthMode('register') }, [])
+  const handleContactClick = useCallback(() => { setPageView('contact'); window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
+  const handleBackToLanding = useCallback(() => { setPageView('landing'); window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
+  const handleAuthClose = useCallback(() => setAuthMode(null), [])
+
+  const navProps = { onLoginClick: handleLoginClick, onRegisterClick: handleRegisterClick, onContactClick: handleContactClick, onLogoClick: handleBackToLanding }
+
+  if (pageView === 'contact') {
+    return <ContactPage onBack={handleBackToLanding} />
+  }
+
+  return (
+    <>
+      <Navbar {...navProps} />
+      <HeroSection onRegisterClick={handleRegisterClick} onLoginClick={handleLoginClick} />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <PricingSection onRegisterClick={handleRegisterClick} />
+      <TestimonialsSection />
+      <CTASection onRegisterClick={handleRegisterClick} />
+      <Footer onContactClick={handleContactClick} />
+      <AuthModal open={authMode !== null} onClose={handleAuthClose} defaultMode={authMode || 'login'} />
+    </>
   )
 }
 

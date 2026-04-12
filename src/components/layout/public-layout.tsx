@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import {
-  Hotel, Menu, X, Sun, Moon, ArrowRight, Shield
+  Hotel, Menu, X, Sun, Moon, ArrowRight, Shield, ChevronDown, LogOut
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 /* -------------------------------------------------------------------------- */
@@ -157,9 +158,12 @@ function ThemeToggle() {
 /* -------------------------------------------------------------------------- */
 export function PublicNavbar() {
   const pathname = usePathname()
+  const { isAuthenticated, currentUser, logout } = useAppStore()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [avatarDropdown, setAvatarDropdown] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const avatarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -185,10 +189,13 @@ export function PublicNavbar() {
       if (mobileOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMobileOpen(false)
       }
+      if (avatarDropdown && avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarDropdown(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [mobileOpen])
+  }, [mobileOpen, avatarDropdown])
 
   // Close on route change
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -200,6 +207,14 @@ export function PublicNavbar() {
   const closeMobile = useCallback(() => {
     setMobileOpen(false)
   }, [])
+
+  const getInitials = (name: string) =>
+    name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
 
   const links = [
     { label: 'Features', href: '/#features' },
@@ -245,19 +260,59 @@ export function PublicNavbar() {
         {/* Desktop CTA */}
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
-          <Link href="/contact">
-            <Button
-              variant="ghost"
-              className="text-white/70 hover:text-white hover:bg-white/10"
-            >
-              Log In
-            </Button>
-          </Link>
-          <Link href="/contact">
-            <Button className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white">
-              Start Free Trial
-            </Button>
-          </Link>
+          {isAuthenticated && currentUser ? (
+            <div className="flex items-center gap-3" ref={avatarRef}>
+              <button
+                onClick={() => setAvatarDropdown(!avatarDropdown)}
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 pr-3 backdrop-blur-sm transition-colors hover:bg-white/10"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-xs font-bold text-white shadow-lg shadow-emerald-500/20">
+                  {getInitials(currentUser.name)}
+                </div>
+                <span className="text-sm font-medium text-white/80">{currentUser.name.split(' ')[0]}</span>
+                <ChevronDown className={cn('h-4 w-4 text-white/50 transition-transform', avatarDropdown && 'rotate-180')} />
+              </button>
+              <AnimatePresence>
+                {avatarDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-4 top-14 w-48 rounded-xl border border-white/10 bg-gray-900/95 p-1.5 shadow-xl shadow-black/40 backdrop-blur-xl"
+                  >
+                    <div className="px-3 py-2 border-b border-white/10 mb-1">
+                      <div className="text-sm font-medium text-white truncate">{currentUser.name}</div>
+                      <div className="text-xs text-white/50 truncate">{currentUser.email}</div>
+                    </div>
+                    <button
+                      onClick={() => { logout(); setAvatarDropdown(false) }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button
+                  variant="ghost"
+                  className="text-white/70 hover:text-white hover:bg-white/10"
+                >
+                  Log In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white">
+                  Start Free Trial
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile toggle */}
@@ -298,19 +353,43 @@ export function PublicNavbar() {
                 </Link>
               ))}
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                <Link href="/contact" onClick={closeMobile}>
-                  <Button
-                    variant="outline"
-                    className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                  >
-                    Log In
-                  </Button>
-                </Link>
-                <Link href="/contact" onClick={closeMobile}>
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
-                    Start Free Trial
-                  </Button>
-                </Link>
+                {isAuthenticated && currentUser ? (
+                  <>
+                    <div className="flex items-center gap-3 px-3 py-2">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-sm font-bold text-white">
+                        {getInitials(currentUser.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-white truncate">{currentUser.name}</div>
+                        <div className="text-xs text-white/50 truncate">{currentUser.email}</div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => { logout(); closeMobile() }}
+                      className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" onClick={closeMobile}>
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                      >
+                        Log In
+                      </Button>
+                    </Link>
+                    <Link href="/register" onClick={closeMobile}>
+                      <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
+                        Start Free Trial
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
