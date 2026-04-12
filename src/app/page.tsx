@@ -1,10 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useTheme } from 'next-themes'
 import {
   Hotel, Calendar, RefreshCw, Globe, Sparkles, Bot, TrendingUp,
   Users, BarChart3, CheckCircle2, ArrowRight, Star, Menu, X,
-  Eye, EyeOff, ChevronRight, Shield, Zap, Clock
+  Eye, EyeOff, ChevronRight, Shield, Zap, Clock, Sun, Moon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,9 +49,16 @@ import { BookingDetailsDialog } from '@/components/booking/booking-details-dialo
 /* -------------------------------------------------------------------------- */
 /*  NAVIGATION                                                                */
 /* -------------------------------------------------------------------------- */
-function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
+function Navbar() {
+  const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -56,11 +66,32 @@ function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => vo
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [mobileOpen])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (mobileOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMobileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [mobileOpen])
+
+  const closeMobile = useCallback(() => setMobileOpen(false), [])
+
   const links = [
     { label: 'Features', href: '#features' },
-    { label: 'How It Works', href: '#how-it-works' },
-    { label: 'Pricing', href: '#pricing' },
-    { label: 'Testimonials', href: '#testimonials' },
+    { label: 'Pricing', href: '/pricing' },
+    { label: 'About', href: '/about' },
+    { label: 'Contact', href: '/contact' },
   ]
 
   return (
@@ -74,23 +105,26 @@ function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => vo
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 shadow-lg shadow-emerald-600/30">
             <Hotel className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold text-white">EasyBeds</span>
-        </a>
+        </Link>
 
         {/* Desktop links */}
         <div className="hidden items-center gap-8 md:flex">
           {links.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-white/60 transition-colors hover:text-white"
+              className={cn(
+                'text-sm font-medium transition-colors hover:text-white',
+                pathname === link.href ? 'text-white' : 'text-white/60'
+              )}
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
 
@@ -98,60 +132,94 @@ function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => vo
         <div className="hidden items-center gap-3 md:flex">
           <Button
             variant="ghost"
-            onClick={onLogin}
+            onClick={() => { window.location.href = '/contact' }}
             className="text-white/70 hover:text-white hover:bg-white/10"
           >
             Log In
           </Button>
+          <Link href="/contact">
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white"
+            >
+              Start Free Trial
+            </Button>
+          </Link>
+          {/* Theme Toggle */}
           <Button
-            onClick={onSignup}
-            className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 text-white"
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="text-white/70 hover:text-white hover:bg-white/10"
+            aria-label="Toggle theme"
           >
-            Start Free Trial
+            {!mounted || theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
         </div>
 
         {/* Mobile toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden text-white/70 hover:text-white hover:bg-white/10"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+        <div className="flex items-center gap-2 md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="text-white/70 hover:text-white hover:bg-white/10"
+            aria-label="Toggle theme"
+          >
+            {!mounted || theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white/70 hover:text-white hover:bg-white/10"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
       </div>
 
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="border-t border-white/10 bg-gray-900/95 px-4 pb-4 pt-2 md:hidden">
-          {links.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white"
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.label}
-            </a>
-          ))}
-          <div className="mt-3 flex flex-col gap-2">
-            <Button
-              variant="outline"
-              onClick={() => { onLogin(); setMobileOpen(false) }}
-              className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-            >
-              Log In
-            </Button>
-            <Button
-              onClick={() => { onSignup(); setMobileOpen(false) }}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25"
-            >
-              Start Free Trial
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Animated Mobile menu */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            ref={menuRef}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="overflow-hidden border-t border-white/10 bg-gray-900/95 backdrop-blur-xl md:hidden"
+          >
+            <div className="px-4 pb-4 pt-2">
+              {links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                  onClick={closeMobile}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+                <Link href="/contact" onClick={closeMobile}>
+                  <Button
+                    variant="outline"
+                    className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                  >
+                    Log In
+                  </Button>
+                </Link>
+                <Link href="/contact" onClick={closeMobile}>
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
+                    Start Free Trial
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   )
 }
@@ -159,7 +227,7 @@ function Navbar({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => vo
 /* -------------------------------------------------------------------------- */
 /*  HERO SECTION                                                              */
 /* -------------------------------------------------------------------------- */
-function HeroSection({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => void }) {
+function HeroSection() {
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-gray-950 via-emerald-950 to-gray-950">
       {/* Animated background orbs */}
@@ -219,25 +287,27 @@ function HeroSection({ onSignup, onLogin }: { onSignup: () => void; onLogin: () 
           className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
         >
           {/* Primary CTA - glow glass button */}
-          <Button
-            size="lg"
-            onClick={onSignup}
-            className="h-13 relative overflow-hidden bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
-          >
-            Start Free Trial
-            <ArrowRight className="ml-2 h-5 w-5" />
-            {/* Glow overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 hover:opacity-100 transition-opacity" />
-          </Button>
+          <Link href="/contact">
+            <Button
+              size="lg"
+              className="h-13 relative overflow-hidden bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
+            >
+              Start Free Trial
+              <ArrowRight className="ml-2 h-5 w-5" />
+              {/* Glow overlay */}
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 hover:opacity-100 transition-opacity" />
+            </Button>
+          </Link>
           {/* Secondary CTA - glass button */}
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={onLogin}
-            className="h-13 border-white/20 bg-white/5 px-8 text-base text-white backdrop-blur-xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 sm:text-lg"
-          >
-            Book a Demo
-          </Button>
+          <Link href="/contact">
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-13 border-white/20 bg-white/5 px-8 text-base text-white backdrop-blur-xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 sm:text-lg"
+            >
+              Book a Demo
+            </Button>
+          </Link>
         </motion.div>
 
         {/* Stats - Glass Stat Cards */}
@@ -545,17 +615,19 @@ function PricingSection() {
                   </li>
                 ))}
               </ul>
-              <Button
-                className={cn(
-                  'w-full transition-all duration-300',
-                  tier.popular
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
-                    : 'border border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30'
-                )}
-                variant={tier.popular ? 'default' : 'outline'}
-              >
-                {tier.cta}
-              </Button>
+              <Link href="/contact">
+                <Button
+                  className={cn(
+                    'w-full transition-all duration-300',
+                    tier.popular
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
+                      : 'border border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30'
+                  )}
+                  variant={tier.popular ? 'default' : 'outline'}
+                >
+                  {tier.cta}
+                </Button>
+              </Link>
             </div>
           ))}
         </div>
@@ -645,7 +717,7 @@ function TestimonialsSection() {
 /* -------------------------------------------------------------------------- */
 /*  CTA SECTION                                                               */
 /* -------------------------------------------------------------------------- */
-function CTASection({ onSignup }: { onSignup: () => void }) {
+function CTASection() {
   return (
     <section className="relative overflow-hidden py-24 sm:py-32">
       {/* Animated gradient background */}
@@ -668,14 +740,15 @@ function CTASection({ onSignup }: { onSignup: () => void }) {
           Join 2,400+ hotels already using EasyBeds to boost revenue, streamline operations, and delight guests.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Button
-            size="lg"
-            onClick={onSignup}
-            className="h-13 bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
-          >
-            Get Started Free
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
+          <Link href="/contact">
+            <Button
+              size="lg"
+              className="h-13 bg-gradient-to-r from-emerald-500 to-teal-500 px-8 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 sm:text-lg border-0"
+            >
+              Get Started Free
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </Link>
           <p className="text-sm text-white/40">
             No credit card required · Free plan available
           </p>
@@ -710,13 +783,26 @@ function Footer() {
           <div>
             <h4 className="mb-4 text-sm font-semibold text-white">Product</h4>
             <ul className="space-y-3">
-              {['Features', 'Pricing', 'Integrations', 'Changelog'].map((item) => (
-                <li key={item}>
-                  <a href="#features" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
-                    {item}
-                  </a>
-                </li>
-              ))}
+              <li>
+                <Link href="/#features" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Features
+                </Link>
+              </li>
+              <li>
+                <Link href="/pricing" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Pricing
+                </Link>
+              </li>
+              <li>
+                <Link href="/#features" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Integrations
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Changelog
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -724,13 +810,26 @@ function Footer() {
           <div>
             <h4 className="mb-4 text-sm font-semibold text-white">Company</h4>
             <ul className="space-y-3">
-              {['About', 'Blog', 'Careers', 'Contact'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
-                    {item}
-                  </a>
-                </li>
-              ))}
+              <li>
+                <Link href="/about" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  About
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link href="/careers" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Contact
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -738,13 +837,21 @@ function Footer() {
           <div>
             <h4 className="mb-4 text-sm font-semibold text-white">Legal</h4>
             <ul className="space-y-3">
-              {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
-                    {item}
-                  </a>
-                </li>
-              ))}
+              <li>
+                <Link href="/privacy" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-sm text-white/50 transition-colors hover:text-emerald-400">
+                  Cookie Policy
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
@@ -1003,25 +1110,16 @@ function AuthModal({
 /*  LANDING PAGE (full marketing page shown to visitors)                      */
 /* -------------------------------------------------------------------------- */
 function LandingPage() {
-  const [authOpen, setAuthOpen] = useState(false)
-
   return (
     <div className="min-h-screen bg-gray-950">
-      <Navbar
-        onLogin={() => setAuthOpen(true)}
-        onSignup={() => setAuthOpen(true)}
-      />
-      <HeroSection
-        onSignup={() => setAuthOpen(true)}
-        onLogin={() => setAuthOpen(true)}
-      />
+      <Navbar />
+      <HeroSection />
       <FeaturesSection />
       <HowItWorksSection />
       <PricingSection />
       <TestimonialsSection />
-      <CTASection onSignup={() => setAuthOpen(true)} />
+      <CTASection />
       <Footer />
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   )
 }
