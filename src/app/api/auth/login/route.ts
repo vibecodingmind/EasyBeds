@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, signJwt } from '@/lib/auth';
+import { seedDatabase } from '@/lib/seed';
 
 // ── In-memory rate limiting ──────────────────────────────────────────────────
 // Max 20 login attempts per email per 15 minutes
@@ -86,18 +87,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Auto-seed fallback: if database is empty, seed it first ───────────
+    // ── Auto-seed fallback: if database is empty, seed it directly ──────
     const userCount = await db.user.count();
     if (userCount === 0) {
       console.warn('[login] Database is empty — auto-seeding...');
-      try {
-        const seedRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/seed`, {
-          method: 'POST',
-        });
-        if (!seedRes.ok) console.error('[login] Auto-seed failed:', seedRes.status);
-      } catch (e) {
-        console.error('[login] Auto-seed fetch failed:', e);
-      }
+      await seedDatabase();
     }
 
     const user = await db.user.findUnique({
