@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import PublicLayout from '@/components/layout/public-layout'
+import { cn } from '@/lib/utils'
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
