@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
-import { addDays, format } from 'date-fns';
+import { addDays, format, subDays } from 'date-fns';
 
 /**
  * Inline seed function — creates demo data directly without HTTP fetch.
