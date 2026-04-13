@@ -2,11 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, signJwt } from '@/lib/auth';
 import { addDays, subDays, format } from 'date-fns';
+import { seedDatabase } from '@/lib/seed';
 
 const SEED_SECRET = process.env.SEED_SECRET || 'easybeds-seed-dev';
 
+// GET /api/seed — Auto-seed if database is empty (used for health check / first visit)
+export async function GET() {
+  try {
+    const userCount = await db.user.count();
+    if (userCount > 0) {
+      return NextResponse.json({
+        success: true,
+        data: { message: 'Database already seeded', userCount },
+      });
+    }
+    // Database is empty — seed it
+    const result = await seedDatabase();
+    if (result.seeded) {
+      return NextResponse.json({ success: true, data: { message: 'Auto-seeded successfully!' } }, { status: 201 });
+    }
+    return NextResponse.json({ success: false, error: result.error || 'Seed failed' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Seed check failed.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
 // POST /api/seed — Creates demo hotel with rooms, bookings, channels, guests
-// Protected: requires SEED_SECRET header or non-production environment
+// Always seeds (clears existing data first) — requires SEED_SECRET in production
 export async function POST(request: NextRequest) {
   try {
     // ── Security: block in production unless SEED_SECRET header matches ─────
