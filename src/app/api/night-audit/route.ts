@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, requireRole } from '@/lib/auth-middleware';
 import { startOfDay, addDays, format } from 'date-fns';
 
-// POST /api/night-audit/run?hotelId=xxx — Run night audit for today
+// POST /api/night-audit/run?hotelId=xxx — Run night audit for today (owner/manager only)
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, ['owner', 'manager']);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     if (!hotelId) {
@@ -142,6 +146,9 @@ export async function POST(request: NextRequest) {
 
 // GET /api/night-audit?hotelId=xxx&from=DATE&to=DATE
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+
   try {
     const hotelId = request.nextUrl.searchParams.get('hotelId');
     if (!hotelId) {

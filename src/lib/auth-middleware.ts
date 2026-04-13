@@ -111,8 +111,9 @@ export async function requireRole(
   const userRole = auth.payload.role;
   const platformRole = auth.payload.platformRole;
 
-  // Platform admins bypass hotel-level role checks
-  if (platformRole === 'admin' && roles.includes('admin')) {
+  // Platform admins bypass ALL hotel-level role checks
+  // They have superuser access to every endpoint regardless of hotel role
+  if (platformRole === 'admin') {
     return auth;
   }
 

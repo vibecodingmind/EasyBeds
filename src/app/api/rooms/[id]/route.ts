@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireRole } from '@/lib/auth-middleware';
+import { requireAuth, requireRole } from '@/lib/auth-middleware';
 
 // GET /api/rooms/:id?hotelId=xxx
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
     const hotelId = request.nextUrl.searchParams.get('hotelId');
@@ -48,11 +51,14 @@ export async function GET(
   }
 }
 
-// PUT /api/rooms/:id?hotelId=xxx
+// PUT /api/rooms/:id?hotelId=xxx — owner, manager, staff only
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, ['owner', 'manager', 'staff']);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
     const hotelId = request.nextUrl.searchParams.get('hotelId');
