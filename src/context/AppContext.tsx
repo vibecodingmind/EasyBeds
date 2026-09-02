@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Tenant, Property, UserRole, User, RoomType, Room, Reservation, ChannelConnection,
   ModuleDefinition, ModuleCode, ModuleLifecycleStatus, TenantEntitlement, SubscriptionAddon,
   UserRoleDefinition, PermissionDefinition, PermissionCode, UserScope,
   AuthorizationContextType, TemporaryHotelAccessSession, HotelAccessReasonCode
 } from '../types';
+import { apiRequest, setStoredToken } from '../lib/session';
 
 export type ModuleStatus = ModuleLifecycleStatus | 'AVAILABLE' | 'LOCKED';
 
@@ -53,6 +54,9 @@ interface AppContextType {
   hasPropertyScope: (propertyId: string) => boolean;
   hasOutletScope: (outletId: string) => boolean;
   switchUser: (userOrId: User | string) => Promise<void>;
+  authReady: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   createCustomRole: (roleData: Omit<UserRoleDefinition, 'id'>) => Promise<UserRoleDefinition>;
   updateRole: (id: string, updates: Partial<UserRoleDefinition>) => Promise<UserRoleDefinition>;
   deleteRole: (id: string) => Promise<void>;
@@ -111,6 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // SaaS Platform vs Hotel Access Context
   const [hotelAccessSession, setHotelAccessSession] = useState<TemporaryHotelAccessSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   // Modular OS State
   const [modules, setModules] = useState<ActiveModuleState[]>([]);
@@ -142,61 +147,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const apiFetch = async (url: string, options: RequestInit = {}) => {
-    const activeTenantId = hotelAccessSession ? hotelAccessSession.targetTenantId : (currentTenant?.id || 'tenant-azure');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-tenant-id': activeTenantId,
-      'x-property-id': currentProperty?.id || 'prop-azure-bay',
-      'x-user-id': currentUser?.id || 'usr-owner-1',
+    const extraHeaders: Record<string, string> = {
+      ...(currentProperty?.id ? { 'x-property-id': currentProperty.id } : {}),
       ...(hotelAccessSession ? { 'x-hotel-access-session-id': hotelAccessSession.sessionId } : {}),
-      ...((options.headers as Record<string, string>) || {}),
     };
 
     try {
-      const res = await fetch(url, { ...options, headers });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Network request failed' }));
-        throw new Error(err.error || err.message || `HTTP ${res.status}`);
-      }
-      return await res.json();
+      return await apiRequest(url, options, extraHeaders);
     } catch (e: any) {
+      if (e.status === 401) {
+        setCurrentUser(null);
+        setAuthReady(true);
+      }
       console.error('API Fetch Error:', e);
       throw e;
     }
   };
 
-  // Initial load: tenants, permissions catalog, roles, and users
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/tenants').then(r => r.json()),
-      fetch('/api/auth/permissions').then(r => r.json()).catch(() => []),
-      fetch('/api/auth/roles').then(r => r.json()).catch(() => []),
-      fetch('/api/users').then(r => r.json()).catch(() => []),
-      fetch('/api/platform/hotel-access/current').then(r => r.json()).catch(() => ({ session: null })),
-    ])
-      .then(([tenantsData, permsData, rolesData, usersData, sessionData]) => {
-        if (tenantsData && tenantsData.length > 0) {
-          setTenants(tenantsData);
-          setCurrentTenant(tenantsData[0]);
-        }
-        if (Array.isArray(permsData)) setPermissionsCatalog(permsData);
-        if (Array.isArray(rolesData)) setRoles(rolesData);
-        if (sessionData && sessionData.session) {
-          setHotelAccessSession(sessionData.session);
-        }
-        if (Array.isArray(usersData) && usersData.length > 0) {
-          setAllUsers(usersData);
-          // Default to Alexander Cross (SUPER_ADMIN) or Elena Rostova (Owner)
-          const defaultUser = usersData.find((u: User) => u.role === 'SUPER_ADMIN') || usersData.find((u: User) => u.role === 'PROPERTY_OWNER') || usersData[0];
-          switchUserInternal(defaultUser, rolesData, permsData);
-        }
-      })
-      .catch(err => console.error('Failed initial load', err));
+  const bootstrapSession = useCallback(async () => {
+    try {
+      const me = await apiRequest('/api/auth/me');
+      if (!me?.user) {
+        setCurrentUser(null);
+        return;
+      }
+
+      const user: User = me.user;
+      const isPlatform = user.tenantId === 'platform'
+        || user.role === 'SUPER_ADMIN'
+        || user.role === 'PLATFORM_ADMIN'
+        || user.role === 'SUPPORT_AGENT'
+        || user.role === 'FINANCE_ADMIN'
+        || user.role === 'TECHNICAL_ADMIN';
+
+      const [tenantsData, permsData, rolesData, usersData, sessionData] = await Promise.all([
+        apiRequest('/api/tenants'),
+        apiRequest('/api/auth/permissions').catch(() => []),
+        apiRequest('/api/auth/roles').catch(() => []),
+        apiRequest('/api/users').catch(() => []),
+        isPlatform
+          ? apiRequest('/api/platform/hotel-access/current').catch(() => ({ session: null }))
+          : Promise.resolve({ session: null }),
+      ]);
+
+      if (Array.isArray(permsData)) setPermissionsCatalog(permsData);
+      if (Array.isArray(rolesData)) setRoles(rolesData);
+      if (Array.isArray(usersData)) setAllUsers(usersData);
+      if (Array.isArray(tenantsData)) setTenants(tenantsData);
+
+      if (sessionData?.session) {
+        setHotelAccessSession(sessionData.session);
+        const sessionTenant = tenantsData.find((t: Tenant) => t.id === sessionData.session.targetTenantId);
+        if (sessionTenant) setCurrentTenant(sessionTenant);
+      } else if (!isPlatform && tenantsData.length > 0) {
+        setCurrentTenant(tenantsData.find((t: Tenant) => t.id === user.tenantId) || tenantsData[0]);
+      }
+
+      switchUserInternal(user, rolesData, permsData);
+      if (sessionData?.session) {
+        setActiveView('dashboard');
+      }
+    } catch {
+      setCurrentUser(null);
+    } finally {
+      setAuthReady(true);
+    }
   }, []);
+
+  useEffect(() => {
+    bootstrapSession();
+  }, [bootstrapSession]);
+
+  const login = async (email: string, password: string) => {
+    const data = await apiRequest('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (data.token) setStoredToken(data.token);
+    setAuthReady(true);
+    await bootstrapSession();
+  };
+
+  const logout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // still clear local session
+    }
+    setStoredToken(null);
+    setCurrentUser(null);
+    setHotelAccessSession(null);
+    setTenants([]);
+    setProperties([]);
+    setCurrentTenant(null);
+    setCurrentProperty(null);
+  };
 
   // When tenant changes, fetch properties and reload roles & users
   useEffect(() => {
-    if (!currentTenant) return;
+    if (!currentTenant || !currentUser) return;
     apiFetch('/api/properties')
       .then(props => {
         setProperties(props);
@@ -265,17 +314,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const switchUser = async (userOrId: User | string) => {
-    let targetUser: User | undefined;
-    if (typeof userOrId === 'string') {
-      targetUser = allUsers.find(u => u.id === userOrId);
-    } else {
-      targetUser = userOrId;
-    }
-
-    if (!targetUser) return;
-    switchUserInternal(targetUser, roles, permissionsCatalog);
-    addToast('info', `Switched active identity to ${targetUser.name} (${targetUser.role})`);
+  const switchUser = async (_userOrId: User | string) => {
+    addToast('info', 'Identity is bound to your signed session. Sign out to switch users.');
   };
 
   // Enter Hotel Context (Audited, Explicit)
@@ -542,6 +582,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hasPropertyScope,
         hasOutletScope,
         switchUser,
+        authReady,
+        login,
+        logout,
         createCustomRole,
         updateRole,
         deleteRole,

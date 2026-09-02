@@ -1,22 +1,80 @@
-import express, { Request, Response } from 'express';
+import 'dotenv/config';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import cors from 'cors';
 import { db } from './server/db';
+import { persist, persistHealth, attachPersistHooks } from './server/persist';
+import {
+  createAuthMiddleware,
+  loginRateLimit,
+  requirePlatform,
+  isPlatformUser,
+  signToken,
+  setSessionCookie,
+  clearSessionCookie,
+  verifyPassword,
+  hashPassword,
+  ensureSeedPasswords,
+  generateTemporaryPassword,
+  demoPassword,
+  jwtSecret,
+  readRequestToken,
+  verifyToken,
+} from './server/session';
 import { auditService } from './server/auditService';
 import { BookingComProvider } from './server/channels/BookingComProvider';
 import { AirbnbProvider } from './server/channels/AirbnbProvider';
 import { ExpediaProvider, AgodaProvider, HostelworldProvider, NobedsProvider } from './server/channels/AdditionalProviders';
 import { ICalProvider } from './server/channels/ICalProvider';
 import { ChannelProvider } from './server/channels/ChannelProvider';
-import { Reservation, Room, HousekeepingTask, MaintenanceWorkOrder, FolioItem, PaymentTransaction, Message, SyncLog, OperationsTask, Guest, FinancialExpense } from './src/types';
+import { Reservation, Room, HousekeepingTask, MaintenanceWorkOrder, FolioItem, PaymentTransaction, Message, SyncLog, OperationsTask, Guest, FinancialExpense, User } from './src/types';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+persist.bootstrap(db);
+attachPersistHooks();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.use(express.json());
+app.set('trust proxy', 1);
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN
+    || process.env.APP_URL
+    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : true),
+  credentials: true,
+}));
+app.use(express.json({ limit: '2mb' }));
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.on('finish', () => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && res.statusCode < 400) {
+      persist.markDirty();
+    }
+  });
+  next();
+});
+
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'vanguard-pms' });
+});
+
+app.get('/ready', (_req: Request, res: Response) => {
+  const health = persistHealth();
+  if (!health.writable) {
+    return res.status(503).json({ status: 'not_ready', persist: health });
+  }
+  res.json({ status: 'ready', persist: health });
+});
+
+app.get('/api/health', (_req: Request, res: Response) => {
+  const health = persistHealth();
+  res.json({ status: 'ok', persist: health });
+});
 
 // Provider registry
 const providers: Record<string, ChannelProvider> = {
@@ -29,45 +87,166 @@ const providers: Record<string, ChannelProvider> = {
   ical: new ICalProvider(),
 };
 
-// Tenant extraction helper
+function getActor(req: Request): User {
+  if (!req.authUser) {
+    throw new Error('Unauthenticated request');
+  }
+  return req.authUser;
+}
+
+function getActorUserId(req: Request): string {
+  return getActor(req).id;
+}
+
+function getActorName(req: Request): string {
+  return getActor(req).name;
+}
+
+// Tenant is derived from the signed session, never from a client-supplied header.
 function getTenantId(req: Request): string {
-  return (req.headers['x-tenant-id'] as string) || 'tenant-azure';
+  const user = getActor(req);
+  if (isPlatformUser(user)) {
+    const sessionId = req.headers['x-hotel-access-session-id'] as string | undefined;
+    const session = sessionId
+      ? db.activeHotelAccessSessions.find(s => s.sessionId === sessionId && s.actorUserId === user.id)
+      : db.getActiveHotelAccessSession(user.id);
+    if (session) {
+      return session.targetTenantId;
+    }
+    return 'platform';
+  }
+  return user.tenantId;
 }
 
 function getPropertyId(req: Request): string {
-  return (req.headers['x-property-id'] as string) || 'prop-azure-bay';
-}
-
-// ----------------------------------------------------
-// 1. TENANTS & USERS & ROLES & PERMISSIONS
-// ----------------------------------------------------
-app.get('/api/tenants', (req: Request, res: Response) => {
-  res.json(db.tenants);
-});
-
-// Current user profile with resolved permissions and scopes
-app.get('/api/auth/current-user', (req: Request, res: Response) => {
+  const user = getActor(req);
   const tenantId = getTenantId(req);
-  const userId = (req.headers['x-user-id'] as string) || req.query.userId as string || 'usr-owner-1';
-  
-  let user = db.users.find(u => u.id === userId);
-  if (!user) {
-    user = db.users.find(u => u.tenantId === tenantId) || db.users[0];
+  const requested = req.headers['x-property-id'] as string | undefined;
+  const tenantProperties = db.properties.filter(p => p.tenantId === tenantId);
+
+  if (requested) {
+    const match = tenantProperties.find(p => p.id === requested);
+    if (match && (!user.scope?.propertyIds?.length || user.scope.propertyIds.includes('*') || user.scope.propertyIds.includes(requested) || isPlatformUser(user))) {
+      return match.id;
+    }
   }
 
+  const scoped = tenantProperties.find(p => !user.scope?.propertyIds?.length || user.scope.propertyIds.includes('*') || user.scope.propertyIds.includes(p.id));
+  return scoped?.id || tenantProperties[0]?.id || '';
+}
+
+function publicUser(user: User) {
+  return user;
+}
+
+function authPayload(user: User) {
   const permissions = db.getUserPermissions(user.id);
   const roleDef = db.roles.find(r => r.id === user.roleId || r.code === user.role);
-
-  res.json({
-    user,
+  return {
+    user: publicUser(user),
     roleDefinition: roleDef,
     permissions,
     scope: user.scope || {
       tenantId: user.tenantId,
       propertyIds: ['*'],
-      outletIds: ['*']
+      outletIds: ['*'],
+    },
+  };
+}
+
+try {
+  jwtSecret();
+} catch (err: any) {
+  console.error(err.message);
+  process.exit(1);
+}
+
+app.post('/api/auth/login', loginRateLimit, async (req: Request, res: Response) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const user = db.users.find(u => u.email.toLowerCase() === email);
+  if (!user || !user.active) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  const hash = persist.getPasswordHash(user.id);
+  if (!hash || !(await verifyPassword(password, hash))) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  user.lastLoginAt = new Date().toISOString();
+  persist.markDirty();
+
+  const token = signToken(user);
+  setSessionCookie(res, token);
+  res.json({ token, ...authPayload(user) });
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+app.get('/api/auth/demo-accounts', (_req: Request, res: Response) => {
+  if (process.env.DEMO_LOGIN_HINTS === 'false') {
+    return res.json([]);
+  }
+  const hints = [
+    'usr-admin-1',
+    'usr-owner-1',
+    'usr-fd-1',
+    'usr-plat-support',
+  ];
+  const accounts = hints
+    .map(id => db.users.find(u => u.id === id))
+    .filter((u): u is User => !!u)
+    .map(u => ({
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      tenant: u.tenantId === 'platform' ? 'SaaS Platform' : (db.tenants.find(t => t.id === u.tenantId)?.name || u.tenantId),
+    }));
+  res.json({ accounts, demoPasswordHint: process.env.NODE_ENV === 'production' ? undefined : demoPassword() });
+});
+
+app.get('/api/auth/me', (req: Request, res: Response) => {
+  const token = readRequestToken(req);
+  if (!token) {
+    return res.json({ user: null });
+  }
+  try {
+    const claims = verifyToken(token);
+    const user = db.getUser(claims.sub);
+    if (!user || !user.active) {
+      return res.json({ user: null });
     }
-  });
+    return res.json(authPayload(user));
+  } catch {
+    return res.json({ user: null });
+  }
+});
+
+app.use(createAuthMiddleware((id) => db.getUser(id)));
+app.use('/api/platform', requirePlatform);
+
+// ----------------------------------------------------
+// 1. TENANTS & USERS & ROLES & PERMISSIONS
+// ----------------------------------------------------
+app.get('/api/tenants', (req: Request, res: Response) => {
+  const user = getActor(req);
+  if (isPlatformUser(user)) {
+    return res.json(db.tenants);
+  }
+  res.json(db.tenants.filter(t => t.id === user.tenantId));
+});
+
+// Current user profile with resolved permissions and scopes
+app.get('/api/auth/current-user', (req: Request, res: Response) => {
+  res.json(authPayload(getActor(req)));
 });
 
 app.get('/api/auth/permissions', (req: Request, res: Response) => {
@@ -103,8 +282,8 @@ app.post('/api/auth/roles', (req: Request, res: Response) => {
   db.addAuditLog({
     id: `aud-${Date.now()}`,
     tenantId,
-    userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-    userName: 'Elena Rostova (Owner)',
+    userId: getActorUserId(req),
+    userName: getActorName(req),
     action: 'ROLE_CREATED',
     details: `Created custom role '${newRole.name}' with ${newRole.permissions.length} granular permissions.`,
     timestamp: new Date().toISOString(),
@@ -120,8 +299,8 @@ app.put('/api/auth/roles/:id', (req: Request, res: Response) => {
     db.addAuditLog({
       id: `aud-${Date.now()}`,
       tenantId,
-      userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-      userName: 'Elena Rostova (Owner)',
+      userId: getActorUserId(req),
+      userName: getActorName(req),
       action: 'ROLE_UPDATED',
       details: `Updated permissions and configuration for role '${updated.name}'.`,
       timestamp: new Date().toISOString(),
@@ -139,8 +318,8 @@ app.delete('/api/auth/roles/:id', (req: Request, res: Response) => {
     db.addAuditLog({
       id: `aud-${Date.now()}`,
       tenantId,
-      userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-      userName: 'Elena Rostova (Owner)',
+      userId: getActorUserId(req),
+      userName: getActorName(req),
       action: 'ROLE_DELETED',
       details: `Deleted custom role ID ${req.params.id}.`,
       timestamp: new Date().toISOString(),
@@ -153,13 +332,16 @@ app.delete('/api/auth/roles/:id', (req: Request, res: Response) => {
 
 app.get('/api/users', (req: Request, res: Response) => {
   const tenantId = getTenantId(req);
-  const users = db.users.filter(u => u.tenantId === tenantId || u.role === 'SUPER_ADMIN');
-  res.json(users);
+  const user = getActor(req);
+  const users = isPlatformUser(user) && tenantId === 'platform'
+    ? db.users.filter(u => u.tenantId === 'platform')
+    : db.users.filter(u => u.tenantId === tenantId);
+  res.json(users.map(publicUser));
 });
 
-app.post('/api/users', (req: Request, res: Response) => {
+app.post('/api/users', async (req: Request, res: Response) => {
   const tenantId = getTenantId(req);
-  const { name, email, role, roleId, department, phone, scope } = req.body;
+  const { name, email, role, roleId, department, phone, scope, password } = req.body;
 
   if (!name || !email || !role) {
     return res.status(400).json({ error: 'Name, email, and role are required' });
@@ -184,17 +366,20 @@ app.post('/api/users', (req: Request, res: Response) => {
     lastLoginAt: new Date().toISOString()
   });
 
+  const temporaryPassword = password && String(password).length >= 8 ? String(password) : generateTemporaryPassword();
+  persist.setPasswordHash(newUser.id, await hashPassword(temporaryPassword));
+
   db.addAuditLog({
     id: `aud-${Date.now()}`,
     tenantId,
-    userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-    userName: 'Elena Rostova (Owner)',
+    userId: getActorUserId(req),
+    userName: getActorName(req),
     action: 'USER_CREATED',
     details: `Added new user ${newUser.name} (${newUser.email}) with role '${newUser.role}'.`,
     timestamp: new Date().toISOString(),
   });
 
-  res.status(201).json(newUser);
+  res.status(201).json({ ...publicUser(newUser), temporaryPassword });
 });
 
 app.put('/api/users/:id', (req: Request, res: Response) => {
@@ -204,8 +389,8 @@ app.put('/api/users/:id', (req: Request, res: Response) => {
     db.addAuditLog({
       id: `aud-${Date.now()}`,
       tenantId,
-      userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-      userName: 'Elena Rostova (Owner)',
+      userId: getActorUserId(req),
+      userName: getActorName(req),
       action: 'USER_UPDATED',
       details: `Updated profile, role, or scopes for user ${updated.name} (${updated.email}).`,
       timestamp: new Date().toISOString(),
@@ -223,8 +408,8 @@ app.delete('/api/users/:id', (req: Request, res: Response) => {
     db.addAuditLog({
       id: `aud-${Date.now()}`,
       tenantId,
-      userId: (req.headers['x-user-id'] as string) || 'usr-owner-1',
-      userName: 'Elena Rostova (Owner)',
+      userId: getActorUserId(req),
+      userName: getActorName(req),
       action: 'USER_DEACTIVATED',
       details: `Deactivated user account ID ${req.params.id}.`,
       timestamp: new Date().toISOString(),
@@ -813,6 +998,10 @@ app.get('/api/channels/logs', (req: Request, res: Response) => {
 // 9. REAL RFC 5545 iCAL FEED ENDPOINT
 // ----------------------------------------------------
 app.get('/api/ical/:tenantId/:propertyId/:roomTypeId/calendar.ics', (req: Request, res: Response) => {
+  const feedSecret = process.env.ICAL_FEED_SECRET;
+  if (feedSecret && req.query.token !== feedSecret) {
+    return res.status(401).send('Calendar feed token required');
+  }
   const { tenantId, propertyId, roomTypeId } = req.params;
   const prop = db.properties.find(p => p.id === propertyId && p.tenantId === tenantId);
   const rt = db.roomTypes.find(r => r.id === roomTypeId && r.tenantId === tenantId);
@@ -1312,14 +1501,14 @@ app.post('/api/modules/addons/subscribe', (req: Request, res: Response) => {
 
   // Auto enable the modules included in the addon
   addon.moduleCodes.forEach(code => {
-    db.enableModule(tenantId, undefined, code, 'usr-admin-1');
+    db.enableModule(tenantId, undefined, code, getActorUserId(req));
   });
 
   db.addAuditLog({
     id: `aud-${Date.now()}`,
     tenantId,
-    userId: 'usr-admin-1',
-    userName: 'Tenant Administrator',
+    userId: getActorUserId(req),
+    userName: getActorName(req),
     action: 'ADDON_SUBSCRIBED',
     details: `Subscribed to ${addon.name} ($${addon.monthlyPrice}/mo). Activated modules: ${addon.moduleCodes.join(', ')}`,
     timestamp: new Date().toISOString(),
@@ -1335,7 +1524,7 @@ app.post('/api/modules/enable', (req: Request, res: Response) => {
   const { moduleCode, applyTenantWide } = req.body;
 
   const targetPropertyId = applyTenantWide ? undefined : propertyId;
-  const result = db.enableModule(tenantId, targetPropertyId, moduleCode, 'usr-admin-1');
+  const result = db.enableModule(tenantId, targetPropertyId, moduleCode, getActorUserId(req));
 
   if (!result.success) {
     return res.status(400).json({ error: result.message });
@@ -1351,7 +1540,7 @@ app.post('/api/modules/disable', (req: Request, res: Response) => {
   const { moduleCode, applyTenantWide } = req.body;
 
   const targetPropertyId = applyTenantWide ? undefined : propertyId;
-  const result = db.disableModule(tenantId, targetPropertyId, moduleCode, 'usr-admin-1');
+  const result = db.disableModule(tenantId, targetPropertyId, moduleCode, getActorUserId(req));
 
   if (!result.success) {
     return res.status(400).json({ error: result.message });
@@ -1366,7 +1555,7 @@ app.post('/api/modules/config', (req: Request, res: Response) => {
   const propertyId = getPropertyId(req);
   const { moduleCode, configuration } = req.body;
 
-  const updated = db.updateModuleConfig(tenantId, propertyId, moduleCode, configuration, 'usr-admin-1');
+  const updated = db.updateModuleConfig(tenantId, propertyId, moduleCode, configuration, getActorUserId(req));
   res.json({ success: true, configuration: updated.configuration });
 });
 
@@ -2261,7 +2450,11 @@ app.get('/api/purchasing/orders', (req: Request, res: Response) => {
 // --- Hotel Access Session Management ---
 
 app.post('/api/platform/hotel-access/enter', (req: Request, res: Response) => {
-  const actorUserId = (req.headers['x-user-id'] as string) || 'usr-admin-1';
+  const actor = getActor(req);
+  const actorUserId = actor.id;
+  if (!db.getUserPermissions(actor.id).includes('platform.hotel_access') && actor.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ error: 'You do not have permission to enter hotel context.' });
+  }
   const { targetTenantId, reason, notes } = req.body;
 
   if (!targetTenantId || !reason) {
@@ -2283,7 +2476,7 @@ app.post('/api/platform/hotel-access/enter', (req: Request, res: Response) => {
 });
 
 app.post('/api/platform/hotel-access/exit', (req: Request, res: Response) => {
-  const actorUserId = (req.headers['x-user-id'] as string) || 'usr-admin-1';
+  const actorUserId = getActorUserId(req);
   const { sessionId } = req.body;
 
   let session = sessionId ? db.activeHotelAccessSessions.find(s => s.sessionId === sessionId) : null;
@@ -2304,7 +2497,7 @@ app.post('/api/platform/hotel-access/exit', (req: Request, res: Response) => {
 });
 
 app.get('/api/platform/hotel-access/current', (req: Request, res: Response) => {
-  const actorUserId = (req.headers['x-user-id'] as string) || req.query.userId as string || 'usr-admin-1';
+  const actorUserId = getActorUserId(req);
   const session = db.getActiveHotelAccessSession(actorUserId);
   res.json({ session });
 });
@@ -2326,7 +2519,7 @@ app.get('/api/platform/tenants', (req: Request, res: Response) => {
 });
 
 app.post('/api/platform/tenants', (req: Request, res: Response) => {
-  const actorUserId = (req.headers['x-user-id'] as string) || 'usr-admin-1';
+  const actorUserId = getActorUserId(req);
   const { name, slug, subscriptionTier, maxProperties, maxRooms, ownerEmail, ownerName } = req.body;
 
   if (!name || !slug) {
@@ -2421,7 +2614,7 @@ app.post('/api/platform/tenants', (req: Request, res: Response) => {
 });
 
 app.patch('/api/platform/tenants/:id', (req: Request, res: Response) => {
-  const actorUserId = (req.headers['x-user-id'] as string) || 'usr-admin-1';
+  const actorUserId = getActorUserId(req);
   const tenant = db.tenants.find(t => t.id === req.params.id);
   if (!tenant) {
     return res.status(404).json({ error: 'Tenant not found' });
@@ -2596,6 +2789,9 @@ app.all('/api/*', (req: Request, res: Response) => {
 
 // Vite middleware setup
 async function start() {
+  await ensureSeedPasswords(db.users);
+  persist.flush(db);
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -2607,13 +2803,31 @@ async function start() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found` });
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Vanguard PMS & Channel Manager running on http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    const persistInfo = persistHealth();
+    const publicHost = process.env.APP_URL
+      || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${HOST}:${PORT}`);
+    console.log(`Vanguard PMS OS listening on ${publicHost} (bind ${HOST}:${PORT}, ${process.env.NODE_ENV || 'development'}, persist=${persistInfo.backing}:${persistInfo.path})`);
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`${signal} received, shutting down...`);
+    persist.flush(db);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 8000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-start();
+start().catch((err) => {
+  console.error('Failed to start server', err);
+  process.exit(1);
+});

@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET}
+      DEMO_PASSWORD: ${DEMO_PASSWORD}
+      DEMO_LOGIN_HINTS: ${DEMO_LOGIN_HINTS:-true}
+      DATA_DIR: /app/data
+      SQLITE_PATH: /app/data/vanguard.sqlite
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - vanguard-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  vanguard-data:

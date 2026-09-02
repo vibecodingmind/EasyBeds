@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { LoginView } from './components/LoginView';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
@@ -31,7 +32,7 @@ import { FolioModal } from './components/FolioModal';
 import { Reservation } from './types';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
-const MainLayout: React.FC = () => {
+const HotelAppShell: React.FC = () => {
   const { activeView, toasts, removeToast, refreshData } = useApp();
   
   // Modal states
@@ -170,10 +171,28 @@ const MainLayout: React.FC = () => {
   );
 };
 
+const RootGate: React.FC = () => {
+  const { currentUser, authReady, login } = useApp();
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">
+        Loading Vanguard PMS OS…
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView onLogin={login} />;
+  }
+
+  return <HotelAppShell />;
+};
+
 export function App() {
   return (
     <AppProvider>
-      <MainLayout />
+      <RootGate />
     </AppProvider>
   );
 }
