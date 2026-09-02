@@ -25,9 +25,6 @@ export const Header: React.FC<{
     currentProperty,
     setCurrentProperty,
     currentUser,
-    allUsers,
-    switchUser,
-    hasPermission,
     refreshData,
     addToast,
     authContextType,
@@ -35,6 +32,7 @@ export const Header: React.FC<{
     isHotelAccessActive,
     exitHotelContext,
     setActiveView,
+    logout,
   } = useApp();
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -163,22 +161,25 @@ export const Header: React.FC<{
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {/* Enterprise Staff Persona & Role Switcher */}
+          {/* Signed-in staff identity */}
           <div className="relative">
-            <div className="flex items-center space-x-2 bg-slate-800/90 pl-2.5 pr-2 py-1 rounded-lg border border-slate-700/80">
+            <div className="flex items-center space-x-2 bg-slate-800/90 pl-2.5 pr-1 py-1 rounded-lg border border-slate-700/80">
               <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[10px] text-slate-400 font-medium hidden 2xl:inline">Persona:</span>
-              <select
-                value={currentUser?.id || ''}
-                onChange={(e) => switchUser(e.target.value)}
-                className="bg-transparent text-xs font-bold text-amber-300 focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[170px] truncate"
+              <div className="hidden sm:block pr-1">
+                <div className="text-xs font-bold text-amber-300 leading-tight truncate max-w-[160px]">
+                  {currentUser?.name}
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight">
+                  {(currentUser?.customRoleName || currentUser?.role || '').replace(/_/g, ' ')}
+                </div>
+              </div>
+              <button
+                onClick={() => logout()}
+                title="Sign out"
+                className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
               >
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id} className="bg-slate-900 text-white font-normal">
-                    {u.name} — {u.customRoleName || u.role.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
