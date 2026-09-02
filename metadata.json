@@ -1,0 +1,6 @@
+{
+  "name": "Vanguard PMS & Modular Hotel OS",
+  "description": "Multi-tenant Hotel Property Management System (PMS), Channel Manager, and Modular Operating System with unified Guest Folios, Restaurant POS, KDS, Swimming Pool Hub, and Multi-Location Inventory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
